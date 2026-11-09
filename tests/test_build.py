@@ -44,8 +44,9 @@ def test_award_badges_keep_the_latest_year_and_a_fixed_order():
 
 @pytest.fixture
 def inputs(tmp_path, monkeypatch):
-    for name in ("SPINE", "NTA_NAMES", "SEED", "PLACES", "SITE_DATA"):
+    for name in ("SPINE", "NTA_NAMES", "SEED", "PLACES", "SITE_DATA", "MENUS"):
         monkeypatch.setattr(paths, name, tmp_path / f"{name}.json")
+    monkeypatch.setattr(paths, "HISTORY", tmp_path / "history")
     write_json(paths.SPINE, [
         {"camis": "1", "name": "LE BERNARDIN", "borough": "Manhattan", "building": "155", "street": "W 51",
          "zip": "10019", "phone": "2125541515", "cuisine": "French", "nta": "MN17", "lat": None, "lng": None,
@@ -93,3 +94,20 @@ def test_build_refuses_to_publish_a_much_thinner_guide(inputs):
     write_json(paths.SITE_DATA, {"meta": {"restaurants": 100}, "restaurants": []})
     with pytest.raises(RuntimeError, match="shrink"):
         B.build()
+
+
+def test_first_month_flags_nothing_then_the_next_month_compares(inputs, monkeypatch):
+    monkeypatch.setattr(B, "billing_month", lambda: "2026-11")
+    B.build()
+    assert all(r["fresh"] is None for r in B.read_json(paths.SITE_DATA)["restaurants"])
+    assert B.read_json(paths.HISTORY / "2026-11.json") == {"G1": [5.0, 3], "LB": [4.7, 5000]}
+    # December: G1 gains 0.1 on 0 new reviews (not rising), LB is unchanged, and a new place appears.
+    write_json(paths.HISTORY / "2026-11.json", {"G1": [4.9, 3], "LB": [4.6, 4980]})
+    places = B.read_json(paths.PLACES)
+    places["N1"] = dict(places["G1"], place_id="N1", name="Fresh Spot", found_by=["nearby"])
+    write_json(paths.PLACES, places)
+    monkeypatch.setattr(B, "billing_month", lambda: "2026-12")
+    meta = B.build()
+    fresh = {r["id"]: r["fresh"] for r in B.read_json(paths.SITE_DATA)["restaurants"]}
+    assert fresh == {"G1": None, "LB": "Rising", "N1": "New to the guide"}
+    assert meta["freshness"] == {"month": "2026-12", "compared_with": "2026-11", "New to the guide": 1, "Rising": 1}

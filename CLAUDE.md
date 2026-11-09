@@ -14,7 +14,7 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 
 ```bash
 pip install -r requirements.txt                 # requests, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 109 passed (node tests skip without node)
+python -m pytest tests -q                       # ~1s. Expect: 119 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
@@ -51,7 +51,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 - **Restaurants are keyed by Google `place_id`.** The seed merges roster rows that share one (25 do, e.g.
   "Babbo" / "Babbo Ristorante e Enoteca") and lists the other names in `also_listed_as`.
 - **Never hand-edit generated files:** `docs/data/restaurants.json`, `data/places.json`,
-  `data/discovery_state.json`, `data/menus.json`, `data/seed/rw_roster.json`, `data/city/*`. Never lower a count in
+  `data/discovery_state.json`, `data/menus.json`, `data/history/*`, `data/seed/rw_roster.json`, `data/city/*`. Never lower a count in
   `data/quota_ledger.json`; code only adds to it.
 - **Google costs money.** Only `discover --live` calls Google. Every request goes through `Client`, which
   reserves in the ledger first; there is no other path. Do not add one. Owner OK before every live run.
@@ -69,7 +69,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `109 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `119 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (1,016 on 2026-11-09,
    after the first live run); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.

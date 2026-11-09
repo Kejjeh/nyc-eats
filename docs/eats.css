@@ -29,3 +29,11 @@
 .mapDots .here { fill: var(--crit); stroke: var(--surface); stroke-width: 1.5; }
 .mapDots .dot.google { fill: var(--accent); }
 .mapDots .dot.roster { fill: var(--ink-3); }
+
+/* Ask box, My list marks, freshness pill */
+.askRow .ask { flex: 1 1 auto; min-width: 0; }
+.marks { display: flex; gap: .5rem; margin: .35rem 0 0; }
+.markBtn { font: inherit; font-size: .85em; padding: .15rem .55rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line, #8884); background: transparent; color: inherit; }
+.markBtn.on { border-color: currentColor; font-weight: 600; }
+.pill.fresh { border-color: currentColor; font-style: italic; }
