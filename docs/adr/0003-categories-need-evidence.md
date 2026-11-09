@@ -29,3 +29,12 @@ The restaurant itself stays in the guide if it is otherwise in scope.
 - Fewer, truer categories. Some real tasting menus at $$ with a terse Google summary go untagged until
   the menu crawl (HANDOFF "Next") can add evidence from the restaurant's own site.
 - Adding a theme to `plan.THEMES` now requires its words in `THEME_WORDS`; the build raises otherwise.
+
+## Follow-up ruling (2026-11-09): price stays as evidence for now
+
+Measured on the first run after this rule: 82 restaurants tagged "Tasting menu", 53 of them on price
+alone. Those 53 look roughly half right: Daniel, Blue Hill, Jungsik, Gabriel Kreuther, Dirt Candy and
+Oiji Mi serve tasting menus; Lena Trattoria, Jeju Noodle Bar, Yakiniku Futago, Rosella, Traif and The
+Tyger are probably only expensive. The owner chose to keep price as evidence until the menu crawl can
+check restaurants' own sites, rather than drop the many true tags with the false ones. Do not remove
+the price signal without a new ruling; replace it with menu evidence when the crawl exists.
