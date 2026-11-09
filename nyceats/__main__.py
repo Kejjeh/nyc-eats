@@ -5,6 +5,7 @@
   plan                    show the discovery plan and what this month's ledger allows (free, offline)
   discover --live -n N [--pool P]   run up to N Google calls from the plan (BILLED SKUs; inside the free cap)
   menus [-n N] [--all]    read restaurants' own websites for tasting/omakase/prix-fixe evidence (free, network)
+  monthly [--live]        spine, seed, every pool up to the cap, menus, build. Dry without --live
   build                   merge everything into docs/data/restaurants.json (offline)
 """
 from __future__ import annotations
@@ -29,6 +30,8 @@ def main(argv=None) -> int:
     p_menu = sub.add_parser("menus")
     p_menu.add_argument("-n", "--limit", type=int, default=None, help="read at most N sites this run")
     p_menu.add_argument("--all", action="store_true", help="re-read every site, not only new or stale ones")
+    p_month = sub.add_parser("monthly")
+    p_month.add_argument("--live", action="store_true", help="spend this month's free Google allowance")
     sub.add_parser("build")
     a = ap.parse_args(argv)
 
@@ -51,10 +54,35 @@ def main(argv=None) -> int:
     elif a.cmd == "menus":
         from .menus import crawl
         print(json.dumps(crawl(a.limit, everything=a.all), indent=1))
+    elif a.cmd == "monthly":
+        print(json.dumps(monthly(a.live), indent=1))
     elif a.cmd == "build":
         from .build import build
         print(json.dumps(build(), indent=1))
     return 0
+
+
+def monthly(live: bool) -> dict:
+    """The monthly refresh: free inputs first, then Google up to each pool's cap, then menus, then build.
+
+    Each pool runs to the ledger's cap (950 per SKU) and no further; the ledger refuses the rest.
+    Without `live` it only prints the dry run, so a scheduled task can be checked by hand first.
+    """
+    from .build import build
+    from .discover import POOLS, dry_run, run_live
+    from .menus import crawl
+    from .seed import refresh as seed_refresh
+    from .spine import refresh as spine_refresh
+    out = {"spine": spine_refresh(), "seed": seed_refresh()}
+    if not live:
+        out["dry_run"] = dry_run(None)
+        return out
+    out["discover"] = {pool: run_live(10**6, pool=pool) for pool in POOLS}
+    # Build first so the crawl reads only places in the guide, then build again with what it found.
+    build()
+    out["menus"] = crawl()
+    out["build"] = build()
+    return out
 
 
 if __name__ == "__main__":

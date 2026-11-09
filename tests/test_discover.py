@@ -183,3 +183,15 @@ def test_nearby_ids_do_not_move_when_the_spine_grows():
     far = [{"borough": "Bronx", "lat": 40.80, "lng": -73.92, "zip": "10454"} for _ in range(10)]
     after = {i["id"] for i in nearby_items(SPINE + far)}
     assert before <= after
+
+
+def test_stale_items_come_after_new_ones_oldest_first_and_failures_are_not_retried():
+    from datetime import datetime, timezone
+    from nyceats.discover import due
+    plan = [{"id": i, "pool": "details", "pages": 1} for i in ("a", "b", "c", "d", "e")]
+    state = {"a": {"ran_at": "2026-10-20T00:00:00Z"}, "b": {"ran_at": "2026-10-01T00:00:00Z"},
+             "c": {"ran_at": "2026-11-08T00:00:00Z"},
+             "d": {"ran_at": "2026-09-01T00:00:00Z", "failed": "404"}}
+    now = datetime(2026, 12, 1, tzinfo=timezone.utc)
+    # e never ran; b and a are 28+ days old (b older); c is recent; d failed and stays failed.
+    assert [it["id"] for it in due(plan, state, now)] == ["e", "b", "a"]

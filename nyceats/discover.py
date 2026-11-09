@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from . import paths, spine
 from .jsonio import read_json, write_json
@@ -17,6 +18,9 @@ from .places_api import Client, PlacesError, now_iso, parse_place
 from .plan import POOL_SKU, build_plan
 
 POOLS = ("details", "themed", "nearby")
+# A finished item is due again after this many days: oldest first, and only after every
+# never-run item of its pool has had its turn, so new coverage always beats a re-check.
+REFRESH_DAYS = 28
 
 
 def load_inputs():
@@ -27,8 +31,21 @@ def pending(plan: list[dict], state: dict) -> list[dict]:
     return [it for it in plan if it["id"] not in state]
 
 
+def stale(plan: list[dict], state: dict, now: datetime | None = None) -> list[dict]:
+    """Finished items last run REFRESH_DAYS+ ago, oldest first. A failed lookup is not retried."""
+    cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=REFRESH_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    done = [it for it in plan if it["id"] in state and not state[it["id"]].get("failed")
+            and state[it["id"]]["ran_at"] <= cutoff]
+    return sorted(done, key=lambda it: (state[it["id"]]["ran_at"], it["id"]))
+
+
+def due(plan: list[dict], state: dict, now: datetime | None = None) -> list[dict]:
+    """What the next run may take: every never-run item, then the stale ones."""
+    return pending(plan, state) + stale(plan, state, now)
+
+
 def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | None,
-             pool: str | None = None) -> list[dict]:
+             pool: str | None = None, now: datetime | None = None) -> list[dict]:
     """The items the next run would take: pools in order, each until its SKU's headroom runs out.
 
     A themed item can need up to 3 calls (pages), so it is only scheduled when
@@ -38,7 +55,7 @@ def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | Non
     budget = max_calls if max_calls is not None else 10**9
     room = {pool: ledger.remaining(POOL_SKU[pool]) for pool in POOLS}
     out = []
-    for it in pending(plan, state):
+    for it in due(plan, state, now):
         if pool and it["pool"] != pool:
             continue
         need = it["pages"]
@@ -55,17 +72,18 @@ def dry_run(max_calls: int | None, ledger: Ledger | None = None, pool: str | Non
     sp, seed, state = load_inputs()
     plan = build_plan(sp, seed)
     todo = pending(plan, state)
+    old = stale(plan, state)
     sched = schedule(plan, state, ledger, max_calls, pool)
     lines = [f"Billing month {billing_month()} (Pacific).",
              f"{'pool':8} {'SKU':38} {'used':>5} {'left':>5} {'items left':>10} {'calls (max)':>11} "
-             f"{'this run':>8}"]
+             f"{'stale':>6} {'this run':>8}"]
     for pool in POOLS:
         sku = POOL_SKU[pool]
         left_items = [i for i in todo if i["pool"] == pool]
         run = [i for i in sched if i["pool"] == pool]
         lines.append(f"{pool:8} {sku:38} {ledger.used(sku):>5} {ledger.remaining(sku):>5} "
                      f"{len(left_items):>10} {sum(i['pages'] for i in left_items):>11} "
-                     f"{sum(i['pages'] for i in run):>8}")
+                     f"{sum(1 for i in old if i['pool'] == pool):>6} {sum(i['pages'] for i in run):>8}")
     total = sum(i["pages"] for i in sched)
     lines.append(f"\nThis run: at most {total} calls, every one inside a free monthly allowance "
                  f"(cap 950 per SKU; Google's free tier is 1,000). Expected Google charge: $0.00.")
