@@ -98,6 +98,7 @@ const FACETS = [
   { key: 'neighborhood', label: 'Neighborhood', get: (r) => [neighborhoodOf(r)].filter(Boolean) },
   { key: 'cuisine', label: 'Cuisine', get: (r) => (r.cuisine ? [r.cuisine] : []) },
   { key: 'price', label: 'Price', get: (r) => [priceLabel(r.price)].filter(Boolean) },
+  { key: 'grade', label: 'Health grade', get: (r) => (r.grade ? [`Grade ${r.grade.letter}`] : []) },
   { key: 'award', label: 'Awards', get: (r) => [...new Set(r.awards.map(awardKind))] },
   { key: 'offers', label: 'Offers',
     get: (r) => [r.delivery === true && 'Delivery', r.takeout === true && 'Takeout',
@@ -233,6 +234,7 @@ function renderRow(r) {
   const open = openState(r);
   if (open != null) head.append(el('span', `pill ${open ? 'open' : 'shut'}`, open ? 'Open now' : 'Closed now'));
   if (r.fresh) head.append(el('span', 'pill fresh', r.fresh));
+  if (r.grade) head.append(el('span', `pill grade g${r.grade.letter}`, `Grade ${r.grade.letter}`));
   row.append(head);
 
   const meta = el('p', 'venueMeta');
@@ -294,6 +296,7 @@ function renderRow(r) {
   if (r.menu) extra.append(el('p', 'checked', `Restaurant's own site read ${r.menu.checked}.`));
   if (r.also_listed_as) extra.append(el('p', null, `Also listed as: ${r.also_listed_as.join(', ')}`));
   if (r.address) extra.append(el('p', null, r.address));
+  if (r.grade) extra.append(el('p', null, `NYC health inspection grade ${r.grade.letter}, graded ${r.grade.date}.`));
   extra.append(el('p', 'checked', r.source === 'google'
     ? `Google details checked ${r.checked}.`
     : 'Rating from the nyc-restaurants award roster; Google details (hours, price, delivery) not fetched yet.'));

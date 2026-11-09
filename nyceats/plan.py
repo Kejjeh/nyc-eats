@@ -68,6 +68,11 @@ START_SIDE_M = 3_200.0
 SPLIT_ABOVE = 150   # restaurants in a cell: Nearby returns 20, so a busier cell is split
 MIN_SIDE_M = 400.0
 MIN_IN_CELL = 8     # a cell with fewer inspected restaurants is park, water or industry
+# A Nearby search returns at most 20 places. A cell whose search came back with 20 has more
+# restaurants than it showed (359 of the first 368 did), so it is split into four quarters, which
+# are new plan items; a quarter that also comes back full is split again, down to this side.
+FULL_PAGE = 20
+MIN_CHILD_SIDE_M = 200.0
 
 
 def themed_items() -> list[dict]:
@@ -147,5 +152,47 @@ def details_items(seed: list[dict]) -> list[dict]:
              "borough": s["borough"], "pages": 1} for s in rows]
 
 
-def build_plan(spine: list[dict], seed: list[dict]) -> list[dict]:
-    return details_items(seed) + themed_items() + nearby_items(spine)
+def _quarters(it: dict) -> list[dict]:
+    """The four quarter-cells of a nearby item's square, as nearby items. [] when too small to split."""
+    circle = it["body"]["locationRestriction"]["circle"]
+    lat, lng, r = circle["center"]["latitude"], circle["center"]["longitude"], circle["radius"]
+    side = (r - 50) * math.sqrt(2)
+    half = side / 2
+    if half < MIN_CHILD_SIDE_M:
+        return []
+    m_per_deg_lng = M_PER_DEG_LAT * math.cos(math.radians(40.75))
+    radius = float(round(half * math.sqrt(2) / 2 + 50))
+    out = []
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            clat = round(lat + dy * half / 2 / M_PER_DEG_LAT, 5)
+            clng = round(lng + dx * half / 2 / m_per_deg_lng, 5)
+            body = dict(it["body"])
+            body["locationRestriction"] = {"circle": {"center": {"latitude": clat, "longitude": clng},
+                                                      "radius": radius}}
+            out.append({"id": f"nearby:{clat:.5f},{clng:.5f},{int(radius)}", "pool": "nearby",
+                        "borough": it["borough"], "spine_restaurants": round(it.get("spine_restaurants", 0) / 4),
+                        "pages": 1, "split_from": it["id"], "body": body})
+    return out
+
+
+def split_items(base: list[dict], state: dict) -> list[dict]:
+    """Quarters of every nearby item whose finished search came back full, level by level."""
+    out, queue, seen = [], list(base), {it["id"] for it in base}
+    while queue:
+        it = queue.pop(0)
+        done = state.get(it["id"])
+        if not done or done.get("failed") or done.get("results", 0) < FULL_PAGE:
+            continue
+        for q in _quarters(it):
+            if q["id"] not in seen:
+                seen.add(q["id"])
+                out.append(q)
+                queue.append(q)
+    return out
+
+
+def build_plan(spine: list[dict], seed: list[dict], state: dict | None = None) -> list[dict]:
+    """Every planned call. With `state`, nearby cells that came back full add their quarters."""
+    base = nearby_items(spine)
+    return details_items(seed) + themed_items() + base + split_items(base, state or {})

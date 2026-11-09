@@ -70,7 +70,7 @@ def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | Non
 def dry_run(max_calls: int | None, ledger: Ledger | None = None, pool: str | None = None) -> str:
     ledger = ledger or Ledger(mirror=paths.LEDGER_MIRROR)
     sp, seed, state = load_inputs()
-    plan = build_plan(sp, seed)
+    plan = build_plan(sp, seed, state)
     todo = pending(plan, state)
     old = stale(plan, state)
     sched = schedule(plan, state, ledger, max_calls, pool)
@@ -144,7 +144,7 @@ def run_live(max_calls: int, *, client: Client | None = None, ledger: Ledger | N
         client = client or Client(google_key(), ledger)
         sp, seed, state = load_inputs()
         places = read_json(paths.PLACES, default={})
-        sched = schedule(build_plan(sp, seed), state, ledger, max_calls, pool)
+        sched = schedule(build_plan(sp, seed, state), state, ledger, max_calls, pool)
         summary = Counter()
         stopped = None
         for it in sched:

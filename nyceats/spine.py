@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
+import math
+
 from . import paths
 from .jsonio import read_json, write_json
 from .names import building_number, name_similarity, phone_digits
@@ -70,6 +72,39 @@ def _coord(v) -> float | None:
     return f if f else None
 
 
+GRADES = ("A", "B", "C")
+
+
+def fetch_grades(session, today: date | None = None) -> dict[str, dict]:
+    """camis -> {"grade", "grade_date"}: the letter on its most recent graded inspection.
+
+    Only A, B and C are letters a restaurant posts. N (not yet graded), P/Z (grade pending) are
+    not grades and are left out, so an ungraded place shows no grade rather than a wrong one.
+    """
+    since = (today or date.today()) - timedelta(days=WINDOW_DAYS)
+    letters = ",".join(f"'{g}'" for g in GRADES)
+    r = session.get(DOHMH_URL, timeout=120, params={
+        "$select": "camis,grade,max(grade_date) as last_graded",
+        "$where": f"grade_date > '{since.isoformat()}T00:00:00' AND grade in({letters})",
+        "$group": "camis,grade", "$limit": 100000})
+    r.raise_for_status()
+    rows = r.json()
+    if len(rows) >= 100000:
+        raise RuntimeError("DOHMH grades hit the row limit exactly; grades would be silently truncated")
+    return latest_grades(rows)
+
+
+def latest_grades(rows: list[dict]) -> dict[str, dict]:
+    best: dict[str, dict] = {}
+    for r in rows:
+        camis, g, d = r.get("camis"), r.get("grade"), (r.get("last_graded") or "")[:10]
+        if not camis or g not in GRADES or not d:
+            continue
+        if camis not in best or d > best[camis]["grade_date"]:
+            best[camis] = {"grade": g, "grade_date": d}
+    return best
+
+
 def fetch_nta_names(session) -> dict[str, str]:
     r = session.get(NTA_URL, timeout=60, params={"$select": "nta_code,nta_name", "$where": "year='2010'",
                                                 "$limit": 1000})
@@ -82,6 +117,9 @@ def refresh(session=None) -> dict:
     import requests
     session = session or requests.Session()
     spine = parse_rows(fetch_rows(session))
+    grades = fetch_grades(session)
+    for s in spine:
+        s.update(grades.get(s["camis"], {"grade": None, "grade_date": None}))
     names = fetch_nta_names(session)
     missing = sorted({s["nta"] for s in spine if s["nta"]} - set(names))
     if missing:
@@ -93,7 +131,8 @@ def refresh(session=None) -> dict:
     write_json(paths.SPINE, spine, compact_rows=True)
     write_json(paths.NTA_NAMES, names, compact_rows=True)
     return {"restaurants": len(spine), "by_borough": dict(Counter(s["borough"] for s in spine)),
-            "no_nta": sum(1 for s in spine if not s["nta"]), "nta_names": len(names)}
+            "no_nta": sum(1 for s in spine if not s["nta"]), "nta_names": len(names),
+            "graded": dict(Counter(s["grade"] for s in spine if s["grade"]))}
 
 
 def load() -> list[dict]:
@@ -118,10 +157,16 @@ def zip_boroughs(spine: list[dict]) -> dict[str, str]:
 class SpineIndex:
     """Find the DOHMH record for a Google place: phone first, then name within the ZIP."""
 
+    TILE = 0.002      # degrees, about 170-220 m: the lookup grid for nta_near
+    NEAR_M = 120.0    # inspected restaurants this close count as the same block
+
     def __init__(self, spine: list[dict]):
         self.by_phone: dict[str, list[dict]] = defaultdict(list)
         self.by_zip: dict[str, list[dict]] = defaultdict(list)
+        self.by_tile: dict[tuple, list[dict]] = defaultdict(list)
         for s in spine:
+            if s["lat"] and s["lng"] and s["nta"]:
+                self.by_tile[(int(s["lat"] / self.TILE), int(s["lng"] / self.TILE))].append(s)
             if s["phone"]:
                 self.by_phone[s["phone"]].append(s)
             if s["zip"]:
@@ -166,3 +211,27 @@ class SpineIndex:
             return None
         codes = {s["nta"] for s in self.by_zip.get(zip_code, []) if s["building"].replace("-", "") == bldg}
         return codes.pop() if len(codes) == 1 and None not in codes else None
+
+
+def _metres(lat1, lng1, lat2, lng2) -> float:
+    dy = (lat2 - lat1) * 111_320.0
+    dx = (lng2 - lng1) * 111_320.0 * math.cos(math.radians(lat1))
+    return math.hypot(dx, dy)
+
+
+def _nta_near(self, lat: float | None, lng: float | None) -> str | None:
+    """The neighborhood shared by every inspected restaurant within NEAR_M of a point.
+
+    For a place whose name, phone and building all miss the spine: its neighbours on the block
+    know the neighborhood. Used only when they all agree (on a boundary street they may not),
+    and only with at least two of them, so one stray record cannot place a restaurant.
+    """
+    if lat is None or lng is None:
+        return None
+    ti, tj = int(lat / self.TILE), int(lng / self.TILE)
+    codes = [s["nta"] for di in (-1, 0, 1) for dj in (-1, 0, 1) for s in self.by_tile.get((ti + di, tj + dj), [])
+             if _metres(lat, lng, s["lat"], s["lng"]) <= self.NEAR_M]
+    return codes[0] if len(codes) >= 2 and len(set(codes)) == 1 else None
+
+
+SpineIndex.nta_near = _nta_near

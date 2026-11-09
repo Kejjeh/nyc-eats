@@ -195,3 +195,22 @@ def test_stale_items_come_after_new_ones_oldest_first_and_failures_are_not_retri
     now = datetime(2026, 12, 1, tzinfo=timezone.utc)
     # e never ran; b and a are 28+ days old (b older); c is recent; d failed and stays failed.
     assert [it["id"] for it in due(plan, state, now)] == ["e", "b", "a"]
+
+
+def test_a_full_nearby_search_is_split_into_quarters_and_a_full_quarter_again():
+    from nyceats.plan import split_items
+    base = [i for i in build_plan(SPINE, SEED) if i["pool"] == "nearby"]
+    parent = base[0]
+    assert split_items(base, {parent["id"]: {"results": 12, "ran_at": "x"}}) == []
+    quarters = split_items(base, {parent["id"]: {"results": 20, "ran_at": "x"}})
+    assert len(quarters) == 4 and {q["split_from"] for q in quarters} == {parent["id"]}
+    r = parent["body"]["locationRestriction"]["circle"]["radius"]
+    assert all(q["body"]["locationRestriction"]["circle"]["radius"] < r for q in quarters)
+    assert all(q["body"]["includedTypes"] == ["restaurant"] for q in quarters)
+    # Stable ids: the same state gives the same quarters, so a finished quarter is never bought twice.
+    assert [q["id"] for q in quarters] == [q["id"] for q in split_items(base, {parent["id"]: {"results": 20}})]
+    state = {parent["id"]: {"results": 20}, quarters[0]["id"]: {"results": 20}}
+    second = split_items(base, state)
+    assert len(second) == 8 and sum(1 for q in second if q.get("split_from") == quarters[0]["id"]) == 4
+    # A failed search is not split.
+    assert split_items(base, {parent["id"]: {"results": 20, "failed": "404"}}) == []

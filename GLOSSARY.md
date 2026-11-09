@@ -16,6 +16,10 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Pool** — one stream of planned calls on one SKU: `details`, `themed`, `nearby`.
 - **Discovery plan** — every planned call as items with stable ids; finished items are recorded in
   `data/discovery_state.json` and never repeated.
+- **Split cell** — a nearby cell whose search came back full (20 places, the most Google returns) is split
+  into four quarter-cells, new plan items (`plan.split_items`); a full quarter splits again, down to 200 m.
+- **Health grade** — the city's A/B/C letter from the restaurant's latest graded inspection (DOHMH), shown
+  only for a row matched to its own inspection record. N, P and Z are not grades and are not shown.
 - **Stale item** — a finished plan item last run 28+ days ago (`discover.REFRESH_DAYS`). Runs after every
   never-run item of its pool, oldest first, so the monthly refresh re-checks the oldest data once the plan
   is done. A failed lookup is not retried.
