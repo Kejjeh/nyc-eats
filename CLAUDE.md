@@ -14,12 +14,13 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 
 ```bash
 pip install -r requirements.txt                 # requests, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 96 passed (node tests skip without node)
+python -m pytest tests -q                       # ~1s. Expect: 109 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
 python -m nyceats discover -n 20                # dry run: prints what 20 calls would do, sends nothing
 python -m nyceats discover --live -n 20         # add --pool details/themed/nearby to run one pool. BILLED SKUs, inside the free cap. Owner OK first, every time
+python -m nyceats menus -n 50                   # free, network: read 50 restaurants' own sites -> data/menus.json
 python -m nyceats build                         # offline: -> docs/data/restaurants.json
 python -m http.server 8771 --directory docs     # view the site; file:// does NOT work (fetch)
 ```
@@ -38,6 +39,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 | `nyceats/places_api.py` | Field masks, `sku_for` (bills at the highest field tier), `parse_place`, `Client` |
 | `nyceats/plan.py` | Discovery plan: three pools (details, themed, nearby), stable item ids, density grid |
 | `nyceats/discover.py` | Dry run / live run; merges results into `data/places.json`; resumes from `data/discovery_state.json` |
+| `nyceats/menus.py` | Menu crawl (ADR 0004): robots.txt, menu-link finder, evidence sentences + prices → `data/menus.json` |
 | `nyceats/build.py` | Scope filter (`leave_out_reason`), category evidence (ADR 0003), neighborhoods, cuisine, awards, score → payload |
 | `nyceats/names.py` | Name similarity (copied from omakase, threshold 0.80), phone, ZIP, building number |
 | `docs/index.html`, `app.js` | The page (ported from nyc-restaurants `docs/venues.js`) |
@@ -49,7 +51,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 - **Restaurants are keyed by Google `place_id`.** The seed merges roster rows that share one (25 do, e.g.
   "Babbo" / "Babbo Ristorante e Enoteca") and lists the other names in `also_listed_as`.
 - **Never hand-edit generated files:** `docs/data/restaurants.json`, `data/places.json`,
-  `data/discovery_state.json`, `data/seed/rw_roster.json`, `data/city/*`. Never lower a count in
+  `data/discovery_state.json`, `data/menus.json`, `data/seed/rw_roster.json`, `data/city/*`. Never lower a count in
   `data/quota_ledger.json`; code only adds to it.
 - **Google costs money.** Only `discover --live` calls Google. Every request goes through `Client`, which
   reserves in the ledger first; there is no other path. Do not add one. Owner OK before every live run.
@@ -67,7 +69,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `96 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `109 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (1,016 on 2026-11-09,
    after the first live run); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.

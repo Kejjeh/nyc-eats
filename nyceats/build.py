@@ -57,11 +57,25 @@ THEME_WORDS = {
     "eel": r"\beel|unagi|anago", "octopus": r"octopus|pulpo|polpo|tako",
     "uni": r"\buni\b|sea urchin|erizo", "peking-duck": r"peking|roast duck|duck",
 }
+# What the menu crawl (menus.MENU_WORDS) found on the restaurant's own site counts for the
+# category it names. This is the evidence ADR 0003 asked for, and the strongest kind.
+MENU_CATEGORY = {"tasting-menu": "Tasting menu", "prix-fixe": "Prix fixe",
+                 "omakase": "Omakase & chef's counter", "chefs-counter": "Omakase & chef's counter"}
 PRICE_EVIDENCE = {"tasting-menu": 3, "kaiseki": 3, "prix-fixe": 3, "omakase": 3, "chefs-counter": 3,
                   "fine-dining": 4}  # protein themes: price says nothing about the protein
 
 
-def theme_evidence(theme: str, g: dict) -> str | None:
+def menu_evidence(category: str, menu: dict | None) -> str | None:
+    """The sentence on the restaurant's own site that names this kind of meal, if the crawl read one."""
+    if not menu or menu.get("status") != "ok":
+        return None
+    for mt, snippet in (menu.get("evidence") or {}).items():
+        if MENU_CATEGORY.get(mt) == category:
+            return snippet
+    return None
+
+
+def theme_evidence(theme: str, g: dict, menu: dict | None = None) -> str | None:
     """Why this place plausibly fits the theme it was found by, or None when nothing says so."""
     if theme not in THEME_WORDS:
         raise KeyError(f"theme {theme!r} has no evidence rule; add one to THEME_WORDS")
@@ -71,26 +85,43 @@ def theme_evidence(theme: str, g: dict) -> str | None:
     m = re.search(THEME_WORDS[theme], text, re.I)
     if m:
         return f"name or summary mentions {m.group(0).lower()!r}"
+    if theme in THEME_CATEGORY and menu_evidence(THEME_CATEGORY[theme], menu):
+        return "restaurant's own site"
     floor = PRICE_EVIDENCE.get(theme)
     if floor and (g.get("price_level") or 0) >= floor:
         return f"price {'$' * g['price_level']}"
     return None
 
 
-def categories_for(g: dict | None, dropped: list) -> list[str]:
-    """Categories with evidence. Each theme match without evidence is appended to `dropped`."""
+def category_reasons(g: dict | None, dropped: list, menu: dict | None = None) -> dict[str, str]:
+    """Category -> why it applies. Each theme match without evidence is appended to `dropped`.
+
+    A category comes from a themed search plus evidence (ADR 0003), or from the restaurant's own
+    site naming the meal outright (menu crawl), whether or not a search returned the place.
+    """
     if not g:
-        return []
-    cats = {"Fine dining"} if g.get("primary_type") == "fine_dining_restaurant" else set()
+        return {}
+    why: dict[str, str] = {}
+    if g.get("primary_type") == "fine_dining_restaurant":
+        why["Fine dining"] = "Google type fine_dining_restaurant"
     for tag in g.get("found_by", []):
         if not tag.startswith("themed:"):
             continue
         theme = tag.split(":", 1)[1]
-        if theme_evidence(theme, g):
-            cats.add(THEME_CATEGORY[theme])
+        reason = theme_evidence(theme, g, menu)
+        if reason:
+            why.setdefault(THEME_CATEGORY[theme], reason)
         else:
             dropped.append(theme)
-    return sorted(cats)
+    for cat in sorted(set(MENU_CATEGORY.values())):
+        if cat not in why and menu_evidence(cat, menu):
+            why[cat] = "restaurant's own site"
+    return dict(sorted(why.items()))
+
+
+def categories_for(g: dict | None, dropped: list, menu: dict | None = None) -> list[str]:
+    """Categories with evidence, sorted. See category_reasons."""
+    return list(category_reasons(g, dropped, menu))
 
 
 def cuisine_of(primary_type: str | None, spine_cuisine: str | None) -> str | None:
@@ -139,6 +170,7 @@ def build(write: bool = True) -> dict:
     nta_names = read_json(paths.NTA_NAMES)
     seed = {s["place_id"]: s for s in read_json(paths.SEED)}
     places = read_json(paths.PLACES, default={})
+    menus = read_json(paths.MENUS, default={})
     zb = spine.zip_boroughs(sp)
     index = spine.SpineIndex(sp)
 
@@ -162,7 +194,9 @@ def build(write: bool = True) -> dict:
         nta = rec["nta"] if rec else index.nta_at(zip_code, address)
         matched["matched by " + how if rec else
                 "neighborhood from same-building records" if nta else "no neighborhood"] += 1
-        categories = categories_for(g, untagged)
+        menu = menus.get(pid)
+        why = category_reasons(g, untagged, menu)
+        menu_ok = bool(menu and menu.get("status") == "ok")
         rows.append({
             "id": pid, "name": name, "address": address, "borough": borough, "zip": zip_code,
             "neighborhood": nta_names.get(nta) if nta else None, "nta": nta,
@@ -170,7 +204,10 @@ def build(write: bool = True) -> dict:
             "cuisine": cuisine_of((g or {}).get("primary_type"), rec["cuisine"] if rec else None),
             "rating": rating, "reviews": reviews,
             "price": (g or {}).get("price_level"),
-            "categories": categories,
+            "categories": list(why), "category_why": why,
+            "menu": {"checked": menu["checked"], "prices": menu.get("prices") or [],
+                     "says": {MENU_CATEGORY[k]: v for k, v in (menu.get("evidence") or {}).items()}}
+            if menu_ok else None,
             "awards": award_badges((s or {}).get("awards", [])),
             "restaurant_week": bool((s or {}).get("restaurant_week")),
             "also_listed_as": (s or {}).get("also_listed_as"),
@@ -201,6 +238,14 @@ def build(write: bool = True) -> dict:
         "prior": PRIOR, "rating_mean": mean, "min_rating": MIN_RATING,
         "left_out": dict(left_out), "neighborhood_match": dict(matched),
         "theme_matches_without_evidence": dict(Counter(untagged)),
+        "menus": {"read": sum(1 for r in rows if r["menu"]),
+                  "categories_from_site": sum(1 for r in rows for w in r["category_why"].values()
+                                              if w == "restaurant's own site"),
+                  # Facts for the price ruling (ADR 0003 follow-up): tags still resting on price alone,
+                  # split by whether the restaurant's site was read (and so did not name the meal).
+                  "price_only": dict(Counter(
+                      "site read, does not say" if r["menu"] else "site not read"
+                      for r in rows for w in r["category_why"].values() if w.startswith("price")))},
         "spine_restaurants": len(sp),
     }
     if write:
