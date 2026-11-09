@@ -2,3 +2,11 @@ config.py
 .env
 *.key
 __pycache__/
+config.py.bak
+*.tmp
+# The City spine is a 6.5 MB cache of a dataset the city republishes daily.
+# Regenerate it with `python -m nyceats spine` (free) rather than growing git history weekly.
+data/city/dohmh.json
+.pytest_cache/
+.claude/
+data/*.lock

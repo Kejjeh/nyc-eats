@@ -1,0 +1,31 @@
+/* nyc-eats additions on top of the nyc-restaurants styles (styles.css, venues.css: copied, unchanged). */
+
+.eatsRow { margin-top: 8px; flex-wrap: wrap; gap: 8px; align-items: center; }
+.eatsField { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: .9rem; }
+.eatsRow select, .nearForm select {
+  font: inherit; padding: 6px 8px; border: 1px solid var(--rule-strong); border-radius: var(--r);
+  background: var(--surface); color: var(--ink);
+}
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.nearForm { display: inline-flex; flex: 1 1 320px; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.nearForm .near { flex: 1 1 180px; min-width: 0; }
+.nearStatus { margin: 6px 0 0; color: var(--ink-2); font-size: .85rem; min-height: 1em; }
+.nearStatus:empty { display: none; }
+
+.pill.cat   { background: var(--value-sub); color: var(--value); border-color: var(--value); }
+.pill.price { color: var(--ink-2); background: var(--surface-2); }
+.pill.open  { color: var(--value); background: transparent; border-color: var(--value); }
+.pill.shut  { color: var(--ink-3); background: transparent; }
+
+.venueMeta .dist { font-weight: 600; }
+.venueMeta .cuisine { color: var(--ink-2); }
+.links { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0 0; font-size: .9rem; }
+.links a { color: var(--accent); }
+.links .deliv { color: var(--ink-2); }
+.more { margin-top: 6px; font-size: .9rem; color: var(--ink-2); }
+.more summary { cursor: pointer; }
+.more ul { margin: 6px 0; padding-left: 18px; }
+.checked { color: var(--ink-3); font-size: .8rem; }
+.mapDots .here { fill: var(--crit); stroke: var(--surface); stroke-width: 1.5; }
+.mapDots .dot.google { fill: var(--accent); }
+.mapDots .dot.roster { fill: var(--ink-3); }

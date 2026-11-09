@@ -1,0 +1,40 @@
+name: Tests
+
+# Offline only: no Google key exists in CI and no step calls Google.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: pip install -r requirements.txt
+      - name: Tests (python + the page logic under node)
+        run: python -m pytest tests -q
+      - name: Page scripts parse
+        run: node --check docs/core.js && node --check docs/app.js
+      # The repo is public and the key would bill the owner's Google project.
+      - name: Guard — no key or local config is tracked
+        run: |
+          if git ls-files | grep -qx 'config.py'; then echo "::error::config.py is tracked"; exit 1; fi
+          if git grep -nI 'AIza[0-9A-Za-z_-]\{35\}' -- . ; then echo "::error::a Google API key is in the tree"; exit 1; fi
+          echo "OK — no key tracked."
