@@ -37,3 +37,7 @@
   border: 1px solid var(--line, #8884); background: transparent; color: inherit; }
 .markBtn.on { border-color: currentColor; font-weight: 600; }
 .pill.fresh { border-color: currentColor; font-style: italic; }
+.pill.grade { font-weight: 700; }
+.pill.gA { color: #2f6fb5; border-color: #2f6fb5; }
+.pill.gB { color: #2e8b57; border-color: #2e8b57; }
+.pill.gC { color: #c76b00; border-color: #c76b00; }

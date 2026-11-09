@@ -193,6 +193,24 @@ def leave_out_reason(g: dict | None, rating, borough) -> str | None:
     return None
 
 
+def write_payload(path, meta: dict, rows: list[dict]) -> None:
+    """The page's data file: readable meta, then one restaurant per line.
+
+    Pretty-printing every field made 4,300 rows 8 MB and every data PR a wall of diff; one row
+    per line is about half the size, and a moved restaurant is one changed line.
+    """
+    import json
+    import os
+    body = ('{"meta": ' + json.dumps(meta, ensure_ascii=False, indent=1, sort_keys=True)
+            + ',\n"restaurants": [\n'
+            + ",\n".join(json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(",", ":")) for r in rows)
+            + "\n]}\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def build(write: bool = True) -> dict:
     sp = spine.load()
     nta_names = read_json(paths.NTA_NAMES)
@@ -219,9 +237,16 @@ def build(write: bool = True) -> dict:
             left_out[reason] += 1
             continue
         rec, how = index.match(name, (g or {}).get("phone"), zip_code, address)
-        nta = rec["nta"] if rec else index.nta_at(zip_code, address)
-        matched["matched by " + how if rec else
-                "neighborhood from same-building records" if nta else "no neighborhood"] += 1
+        lat = (g or {}).get("lat") if g and g.get("lat") is not None else (s or {}).get("lat")
+        lng = (g or {}).get("lng") if g and g.get("lng") is not None else (s or {}).get("lng")
+        nta, where = (rec["nta"], "matched by " + how) if rec else (None, None)
+        if not nta:
+            nta = index.nta_at(zip_code, address)
+            where = "neighborhood from same-building records" if nta else None
+        if not nta:
+            nta = index.nta_near(lat, lng)
+            where = "neighborhood from records on the block" if nta else "no neighborhood"
+        matched[where] += 1
         menu = menus.get(pid)
         why = category_reasons(g, untagged, menu)
         menu_ok = bool(menu and menu.get("status") == "ok")
@@ -246,8 +271,9 @@ def build(write: bool = True) -> dict:
             "delivery": (g or {}).get("delivery"), "takeout": (g or {}).get("takeout"),
             "reservable": (g or {}).get("reservable"),
             "summary": (g or {}).get("summary"),
-            "lat": (g or {}).get("lat") if g and g.get("lat") is not None else (s or {}).get("lat"),
-            "lng": (g or {}).get("lng") if g and g.get("lng") is not None else (s or {}).get("lng"),
+            "lat": lat, "lng": lng,
+            # The city's letter grade, only for a restaurant matched to its own inspection record.
+            "grade": {"letter": rec["grade"], "date": rec["grade_date"]} if rec and rec.get("grade") else None,
             "source": "google" if g else "roster",
             "checked": ((g or {}).get("fetched_at") or "")[:10] or None,
         })
@@ -281,6 +307,7 @@ def build(write: bool = True) -> dict:
                       "site read, does not say" if r["menu"] else "site not read"
                       for r in rows for w in r["category_why"].values() if w.startswith("price")))},
         "freshness": {"month": month, "compared_with": prev_month, **Counter(fresh.values())},
+        "graded": dict(Counter(r["grade"]["letter"] for r in rows if r["grade"])),
         "spine_restaurants": len(sp),
     }
     if write:
@@ -288,7 +315,7 @@ def build(write: bool = True) -> dict:
         if len(rows) < 0.8 * old["meta"]["restaurants"]:
             raise RuntimeError(f"payload would shrink from {old['meta']['restaurants']} to {len(rows)} rows; "
                                "refusing. Check the inputs before publishing a thinner guide.")
-        write_json(paths.SITE_DATA, {"meta": meta, "restaurants": rows}, compact_rows=False)
+        write_payload(paths.SITE_DATA, meta, rows)
         write_json(paths.HISTORY / f"{month}.json", {r["id"]: [r["rating"], r["reviews"]] for r in rows},
                    compact_rows=True)
     return meta
