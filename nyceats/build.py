@@ -46,9 +46,13 @@ TYPE_LABELS = {"steak_house": "Steakhouse", "barbecue_restaurant": "Barbecue", "
 _TASTING = r"tasting|omakase|kaiseki|kappo|prix|fixe|multi-?course|chef'?s counter|set menu"
 THEME_WORDS = {
     "tasting-menu": _TASTING, "kaiseki": _TASTING, "prix-fixe": _TASTING,
-    "omakase": r"omakase|chef'?s counter|kappo|kaiseki", "chefs-counter": r"omakase|chef'?s counter|kappo|counter",
+    # Whole words only where a fragment is common: "game" in "watch the game", "a5" in a name,
+    # "counter" in "order at the counter" are not evidence (review of PR #1).
+    "omakase": r"omakase|chef'?s counter|kappo|kaiseki",
+    "chefs-counter": r"omakase|chef'?s counter|kappo|sushi counter|counter seat",
     "fine-dining": r"tasting|fine dining|michelin",
-    "wagyu": r"wagyu|kobe|a5", "wild-game": r"venison|game|boar|elk|bison|quail|pheasant",
+    "wagyu": r"wagyu|kobe|\ba5\b",
+    "wild-game": r"venison|wild game|\bgame (?:bird|meat)|\bboar\b|\belk\b|bison|quail|pheasant",
     "goat": r"goat|chivo|cabrito|mutton", "rabbit": r"rabbit|conejo|lapin|coniglio",
     "eel": r"\beel|unagi|anago", "octopus": r"octopus|pulpo|polpo|tako",
     "uni": r"\buni\b|sea urchin|erizo", "peking-duck": r"peking|roast duck|duck",

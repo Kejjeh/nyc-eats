@@ -55,3 +55,24 @@ def test_categories_keep_only_evidenced_themes_and_count_the_rest():
 
 def test_googles_fine_dining_type_is_a_category_on_its_own():
     assert categories_for(place("Luthun", "fine_dining_restaurant", found_by=["nearby"]), []) == ["Fine dining"]
+
+
+@pytest.mark.parametrize("theme,summary", [
+    ("wild-game", "Sports bar to watch the game"),
+    ("wild-game", "Board games and burgers"),
+    ("wagyu", "Ba5 noodle house"),
+    ("chefs-counter", "Order at the counter, sandwiches to go"),
+])
+def test_theme_words_need_whole_words_not_fragments(theme, summary):
+    """Review of PR #1: a fragment inside another word is not evidence."""
+    assert theme_evidence(theme, place("X", summary=summary, found_by=[f"themed:{theme}"])) is None
+
+
+@pytest.mark.parametrize("theme,summary", [
+    ("wild-game", "Seasonal game birds and venison"),
+    ("wagyu", "A5 Miyazaki wagyu by the ounce"),
+    ("chefs-counter", "Twelve seats at the chef's counter"),
+    ("chefs-counter", "Sushi counter omakase"),
+])
+def test_theme_words_still_match_real_evidence(theme, summary):
+    assert theme_evidence(theme, place("X", summary=summary, found_by=[f"themed:{theme}"])) is not None
