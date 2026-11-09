@@ -1,17 +1,16 @@
 # nyc-eats
 
-A private, always-current guide to good NYC restaurants: one place to find somewhere to eat or order
+A public, always-current guide to good NYC restaurants: one place to find somewhere to eat or order
 from, near home or near a friend, and a data store a Claude chat can query for recommendations
 ("Italian, $$, open past 10, near this address").
 
-**Status (2026-11-09): design stage. Nothing is built.** This README records the upstream
-measurements the design rests on (`sop-verify-upstream`). One owner decision is open; see the end.
+**Status (2026-11-09): design settled, nothing built yet.** This README records the upstream
+measurements the design rests on (`sop-verify-upstream`); decisions are in `docs/adr/`.
 
 ## Decisions already made (owner, 2026-11-09)
 
 - Own repo, separate from `Kejjeh/omakase` and `Kejjeh/nyc-restaurants`; reuse their match-trust,
   scoring and geo code by copying, not by a shared package (yet).
-- Private repo and page until the Google storage question is settled.
 - Manhattan first, then Brooklyn and Queens, then the Bronx and Staten Island.
 - The rating bar is chosen from real data, not guessed.
 - Google spend stays inside the monthly free allowance unless the owner approves a specific pass.
@@ -84,6 +83,9 @@ The request is billed at the highest SKU among the fields asked for.
 Consequence: a committed dataset of Google ratings, hours, websites or coordinates is not permitted.
 Only `place_id` may be stored. Everything else from Google has to be fetched when it is shown.
 
-## Open owner decision
+## Owner decisions after the recon
 
-How the guide uses Google given the terms above. See the session notes / issue once filed.
+- **Google data is stored and published anyway** (ADR 0001): owner-accepted risk, same as `omakase`
+  and `nyc-restaurants`.
+- **Free allowance only; best-of scope; public site** (ADR 0002): 950 calls per SKU per month,
+  the best sit-down places in the Bronx, Manhattan, Brooklyn and Queens, rated 4.2+.
