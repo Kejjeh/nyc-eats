@@ -2,12 +2,12 @@
  "months": {
   "2026-11": {
    "nearby_search_enterprise": 3,
-   "nearby_search_enterprise_atmosphere": 1,
+   "nearby_search_enterprise_atmosphere": 369,
    "place_details_enterprise": 3,
    "place_details_enterprise_atmosphere": 950,
    "place_details_pro": 3,
    "text_search_enterprise": 4,
-   "text_search_enterprise_atmosphere": 9,
+   "text_search_enterprise_atmosphere": 103,
    "text_search_essentials_ids": 10
   }
  },
