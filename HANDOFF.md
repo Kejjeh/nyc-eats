@@ -8,13 +8,13 @@ guide's code.** The ledger starts at the 29 recon-probe calls of 2026-11-09.
 
 ## Next
 
-1. **Owner OK, then the first live run.** Suggested: a 30-call smoke run
-   (`python -m nyceats discover --live -n 30`), `build`, eyeball the page, then the rest of November:
-   947 details + 168 themed + 363 nearby calls, all inside the free tier. Expected charge $0.00.
+1. **First live run done (2026-11-09, owner OK):** 7 themed calls, 99 places; outputs on branch
+   `data/first-live-run` (not yet pushed). Next live runs need the owner's OK each time. Left in
+   November: 947 details + 159 themed + 368 nearby calls, all inside the free tier ($0.00).
 2. Enable GitHub Pages (main, `/docs`) once the build PR is merged.
 3. Monthly run (a scheduled task on this PC, owner to approve): spine, seed, `discover --live` up to the
    cap, build, commit. Pools refresh oldest-first once the plan is exhausted (not written yet).
-4. Menu crawl to verify categories (tasting menu / prix fixe) on restaurant websites.
+4. Menu crawl to verify categories on restaurant websites. Priority: about half of the 53 tasting-menu tags that rest on price alone look wrong (ADR 0003 follow-up).
 5. `recommend` CLI and an "ask Claude" box on the page (the chat-query goal).
 
 ## Open owner decisions
