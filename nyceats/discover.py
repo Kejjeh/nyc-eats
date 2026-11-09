@@ -6,6 +6,7 @@ allowance, and even then the ledger refuses any call past 950 for its SKU.
 """
 from __future__ import annotations
 
+import os
 import time
 from collections import Counter
 
@@ -50,7 +51,7 @@ def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | Non
 
 
 def dry_run(max_calls: int | None, ledger: Ledger | None = None, pool: str | None = None) -> str:
-    ledger = ledger or Ledger()
+    ledger = ledger or Ledger(mirror=paths.LEDGER_MIRROR)
     sp, seed, state = load_inputs()
     plan = build_plan(sp, seed)
     todo = pending(plan, state)
@@ -109,32 +110,72 @@ def run_item(client: Client, it: dict, places: dict, now: str) -> dict:
     return {"ran_at": now, "calls": calls, "results": results, "new": new}
 
 
+# A details lookup Google answers with one of these is about that one place (an ID gone stale, a
+# listing removed): record it and move on. Any other error (403 key, 429 quota, 5xx) would fail
+# every item the same way, so it stops the run.
+ITEM_ERRORS = {400, 404}
+
+
 def run_live(max_calls: int, *, client: Client | None = None, ledger: Ledger | None = None,
              pool: str | None = None) -> dict:
+    import requests
+
     from .keys import google_key
-    ledger = ledger or Ledger()
-    client = client or Client(google_key(), ledger)
-    sp, seed, state = load_inputs()
-    places = read_json(paths.PLACES, default={})
-    sched = schedule(build_plan(sp, seed), state, ledger, max_calls, pool)
-    summary = Counter()
-    stopped = None
-    for it in sched:
+    with _RunLock(paths.RUN_LOCK):
+        ledger = ledger or Ledger(mirror=paths.LEDGER_MIRROR)
+        client = client or Client(google_key(), ledger)
+        sp, seed, state = load_inputs()
+        places = read_json(paths.PLACES, default={})
+        sched = schedule(build_plan(sp, seed), state, ledger, max_calls, pool)
+        summary = Counter()
+        stopped = None
+        for it in sched:
+            try:
+                out = run_item(client, it, places, now_iso())
+            except QuotaExhausted as e:
+                stopped = str(e)
+            except PlacesError as e:
+                if it["pool"] == "details" and e.status in ITEM_ERRORS:
+                    out = {"ran_at": now_iso(), "calls": 1, "results": 0, "new": 0, "failed": str(e)[:200]}
+                    summary["failed items"] += 1
+                else:
+                    stopped = str(e)
+            except (requests.RequestException, ValueError) as e:
+                stopped = f"{type(e).__name__}: {e}"
+            if stopped:
+                # Pages already fetched for a half-finished item stay in `places` and are saved; the
+                # item itself is not marked done, so it runs again from page 1 next time.
+                _save(places, state)
+                break
+            state[it["id"]] = out
+            summary["items"] += 1
+            summary["new places"] += out["new"]
+            summary["results"] += out["results"]
+            # Save after every item, so a crash loses at most one item's results, never the ledger's count.
+            _save(places, state)
+        return {"calls sent": client.calls, **summary, "places on file": len(places), "stopped early": stopped}
+
+
+def _save(places: dict, state: dict) -> None:
+    write_json(paths.PLACES, places, compact_rows=True)
+    write_json(paths.DISCOVERY_STATE, state, compact_rows=True)
+
+
+class _RunLock:
+    """Refuse a second live run while one is going: two would overwrite each other's places.json."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
         try:
-            out = run_item(client, it, places, now_iso())
-        except QuotaExhausted as e:
-            stopped = str(e)
-            break
-        except PlacesError as e:
-            # A Google error stops the run: a bad key or a changed field would fail every item the same way.
-            stopped = str(e)
-            break
-        state[it["id"]] = out
-        summary["items"] += 1
-        summary["new places"] += out["new"]
-        summary["results"] += out["results"]
-        # Save after every item, so a crash loses at most one item's results, never the ledger's count.
-        write_json(paths.PLACES, places, compact_rows=True)
-        write_json(paths.DISCOVERY_STATE, state, compact_rows=True)
-    return {"calls sent": client.calls, **summary, "places on file": len(places),
-            "stopped early": stopped}
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            raise SystemExit(f"{self.path} exists: another live discovery run is going. If none is "
+                             "(a killed run left it), delete the file and run again.") from None
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return self
+
+    def __exit__(self, *exc):
+        os.unlink(self.path)

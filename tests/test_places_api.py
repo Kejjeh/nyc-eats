@@ -59,7 +59,7 @@ class _Boom:
 
 
 def test_client_sends_nothing_once_the_cap_is_reached(tmp_path):
-    led = Ledger(tmp_path / "l.json")
+    led = Ledger(tmp_path / "l.json", allow_new=True)
     led.reserve("place_details_enterprise_atmosphere", CAP)
     client = Client("k", led, session=_Boom(), pause=0)
     with pytest.raises(QuotaExhausted):

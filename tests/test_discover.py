@@ -46,7 +46,7 @@ def test_details_go_best_rated_first():
 
 
 def test_schedule_never_starts_a_themed_item_the_cap_would_cut_off(tmp_path):
-    led = Ledger(tmp_path / "l.json")
+    led = Ledger(tmp_path / "l.json", allow_new=True)
     led.reserve(POOL_SKU["themed"], CAP - 2)  # 2 calls left; a themed item can need 3
     plan = build_plan(SPINE, SEED)
     sched = discover.schedule(plan, {}, led, None)
@@ -55,14 +55,14 @@ def test_schedule_never_starts_a_themed_item_the_cap_would_cut_off(tmp_path):
 
 
 def test_schedule_respects_the_run_ceiling(tmp_path):
-    sched = discover.schedule(build_plan(SPINE, SEED), {}, Ledger(tmp_path / "l.json"), 4)
+    sched = discover.schedule(build_plan(SPINE, SEED), {}, Ledger(tmp_path / "l.json", allow_new=True), 4)
     assert sum(i["pages"] for i in sched) <= 4
 
 
 def test_done_items_are_not_scheduled_again(tmp_path):
     plan = build_plan(SPINE, SEED)
     state = {"details:P2": {"ran_at": "x"}}
-    sched = discover.schedule(plan, state, Ledger(tmp_path / "l.json"), 1)
+    sched = discover.schedule(plan, state, Ledger(tmp_path / "l.json", allow_new=True), 1)
     assert sched[0]["id"] == "details:P1"
 
 
@@ -100,8 +100,11 @@ class FakeSession:
 
 @pytest.fixture
 def sandbox(tmp_path, monkeypatch):
-    for name in ("PLACES", "DISCOVERY_STATE", "LEDGER"):
+    for name in ("PLACES", "DISCOVERY_STATE", "LEDGER", "LEDGER_MIRROR", "RUN_LOCK"):
         monkeypatch.setattr(paths, name, tmp_path / f"{name}.json")
+    # No test may reach the real key on this machine: a run_live without a fake client fails loudly.
+    import nyceats.keys
+    monkeypatch.setattr(nyceats.keys, "google_key", lambda: pytest.fail("a test asked for the real Google key"))
     monkeypatch.setattr(discover, "load_inputs", lambda: (SPINE, SEED, discover.read_json(
         paths.DISCOVERY_STATE, default={})))
     monkeypatch.setattr(discover.time, "sleep", lambda s: None)
@@ -109,7 +112,7 @@ def sandbox(tmp_path, monkeypatch):
 
 
 def test_live_run_counts_every_call_in_the_ledger_and_resumes(sandbox):
-    led = Ledger(paths.LEDGER)
+    led = Ledger(paths.LEDGER, allow_new=True)
     session = FakeSession()
     # 6 = 3 details + one themed item reserved at 3 pages; Google stops after 2, so 5 are sent.
     out = discover.run_live(6, client=Client("k", led, session=session, pause=0), ledger=led)
@@ -120,11 +123,63 @@ def test_live_run_counts_every_call_in_the_ledger_and_resumes(sandbox):
     assert set(places) == {"P0", "P1", "P2", "T1", "T2"}
     # A second run picks up after the finished items rather than repeating them.
     session2 = FakeSession()
-    discover.run_live(2, client=Client("k", Ledger(paths.LEDGER), session=session2, pause=0),
-                      ledger=Ledger(paths.LEDGER))
+    discover.run_live(2, client=Client("k", Ledger(paths.LEDGER, allow_new=True), session=session2, pause=0),
+                      ledger=Ledger(paths.LEDGER, allow_new=True))
     assert not any("places/P" in url for url, _ in session2.sent)
 
 
 def test_pool_option_schedules_only_that_pool(tmp_path):
-    sched = discover.schedule(build_plan(SPINE, SEED), {}, Ledger(tmp_path / "l.json"), 10, pool="nearby")
+    sched = discover.schedule(build_plan(SPINE, SEED), {}, Ledger(tmp_path / "l.json", allow_new=True), 10, pool="nearby")
     assert sched and all(i["pool"] == "nearby" for i in sched)
+
+
+class StaleIdSession(FakeSession):
+    """Google answers 404 for one stale place_id and normally for the rest."""
+    def request(self, method, url, json=None, headers=None, timeout=None):
+        if url.endswith("/P2"):
+            self.sent.append((url, json))
+            r = FakeResp({"error": {"code": 404}})
+            r.status_code, r.text = 404, "NOT_FOUND"
+            return r
+        return super().request(method, url, json, headers, timeout)
+
+
+def test_a_stale_place_id_is_recorded_and_the_run_moves_on(sandbox):
+    led = Ledger(paths.LEDGER, allow_new=True)
+    out = discover.run_live(3, client=Client("k", led, session=StaleIdSession(), pause=0), ledger=led)
+    state = discover.read_json(paths.DISCOVERY_STATE)
+    assert out["failed items"] == 1 and out["stopped early"] is None
+    assert "404" in state["details:P2"]["failed"] and "details:P0" in state
+
+
+class DownSession(FakeSession):
+    """Page 1 of a text search works, then Google returns 500."""
+    def request(self, method, url, json=None, headers=None, timeout=None):
+        if "searchText" in url and json and json.get("pageToken"):
+            self.sent.append((url, json))
+            r = FakeResp({})
+            r.status_code, r.text = 500, "backend error"
+            return r
+        return super().request(method, url, json, headers, timeout)
+
+
+def test_a_server_error_stops_the_run_but_keeps_pages_already_paid_for(sandbox):
+    led = Ledger(paths.LEDGER, allow_new=True)
+    out = discover.run_live(6, client=Client("k", led, session=DownSession(), pause=0), ledger=led)
+    assert "500" in out["stopped early"]
+    assert "T1" in discover.read_json(paths.PLACES)  # page 1 survives
+    assert not any(k.startswith("themed:") for k in discover.read_json(paths.DISCOVERY_STATE))  # item reruns
+
+
+def test_a_second_live_run_is_refused_while_one_holds_the_lock(sandbox):
+    paths.RUN_LOCK.write_text("1", encoding="utf-8")
+    with pytest.raises(SystemExit, match="another live discovery run"):
+        discover.run_live(1, client=Client("k", Ledger(paths.LEDGER, allow_new=True), session=FakeSession(), pause=0))
+
+
+def test_nearby_ids_do_not_move_when_the_spine_grows():
+    from nyceats.plan import nearby_items
+    before = {i["id"] for i in nearby_items(SPINE)}
+    far = [{"borough": "Bronx", "lat": 40.80, "lng": -73.92, "zip": "10454"} for _ in range(10)]
+    after = {i["id"] for i in nearby_items(SPINE + far)}
+    assert before <= after

@@ -9,3 +9,4 @@ config.py.bak
 data/city/dohmh.json
 .pytest_cache/
 .claude/
+data/*.lock

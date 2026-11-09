@@ -26,3 +26,15 @@ guide's code.** The ledger starts at the 29 recon-probe calls of 2026-11-09.
 - **Shared place_ids in the roster.** 25 place_ids carry two roster rows in nyc-restaurants; most are
   one room named twice, a few are two businesses (Contra / Bar Contra). Merged here; the source fix
   belongs to nyc-restaurants.
+
+## Known limits
+
+- **The ledger sees only this repo's calls.** Google's free allowance is per billing account. ADR 0002
+  assumes omakase and nyc-restaurants use legacy Places SKUs that don't share these caps; that is not
+  verified. Both are idle until late January (Restaurant Week), so November–January are unaffected.
+  Check Google Cloud billing (SKU report) after the first live month, and before RW resumes.
+- **Ledger safety (review 2026-11-09):** a live run holds `data/discover.lock`; every reservation
+  re-reads the ledger under `data/quota_ledger.lock`; a copy at `~/.nyceats/quota_ledger.json` wins if
+  the repo copy is ever rolled back. A killed run can leave a lock file: delete it only when no run is going.
+- Roster rows with no Google record skip the closed-status and restaurant-type checks until their
+  details lookup runs (first in the plan, best-rated first).

@@ -134,7 +134,10 @@ class SpineIndex:
         digits = phone_digits(phone)
         # A shared phone is strong evidence, but a hotel or food hall switchboard serves several rooms,
         # so the name still has to be close, or the building has to agree.
-        for s in self.by_phone.get(digits or "", []):
+        # Branches of one group can share a phone line, so the record in this ZIP/building goes first.
+        same_phone = sorted(self.by_phone.get(digits or "", []),
+                            key=lambda s: (s["zip"] != zip_code, s["building"].replace("-", "") != bldg))
+        for s in same_phone:
             if name_similarity(name, s["name"]) >= 0.5 or (bldg and s["building"].replace("-", "") == bldg
                                                             and s["zip"] == zip_code):
                 return s, "phone"

@@ -108,7 +108,9 @@ def parse_place(p: dict, fetched_at: str) -> dict:
 
 
 class PlacesError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 class Client:
@@ -132,7 +134,7 @@ class Client:
         time.sleep(self.pause)
         if r.status_code != 200:
             # The body names the problem (bad field, quota); the key is in a header, never in the body.
-            raise PlacesError(f"{endpoint} HTTP {r.status_code}: {r.text[:300]}")
+            raise PlacesError(f"{endpoint} HTTP {r.status_code}: {r.text[:300]}", r.status_code)
         return r.json()
 
     def text_search(self, body: dict) -> dict:

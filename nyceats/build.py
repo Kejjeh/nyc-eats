@@ -89,8 +89,11 @@ def build(write: bool = True) -> dict:
     rows, left_out, matched = [], Counter(), Counter()
     for pid in sorted(set(seed) | set(places)):
         g, s = places.get(pid), seed.get(pid)
-        name = (g or {}).get("name") or s["name"]
-        address = (g or {}).get("address") or s["address"]
+        name = (g or {}).get("name") or (s or {}).get("name")
+        address = (g or {}).get("address") or (s or {}).get("address")
+        if not name:
+            left_out["no name"] += 1
+            continue
         rating = (g or {}).get("rating") if g and g.get("rating") is not None else (s or {}).get("rating")
         reviews = (g or {}).get("reviews") if g and g.get("reviews") is not None else (s or {}).get("reviews")
         zip_code = zip_from_address(address)

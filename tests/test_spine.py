@@ -75,3 +75,11 @@ def test_no_neighborhood_when_records_at_the_building_disagree():
     rows = ROWS + [{"camis": "9", "dba": "OTHER", "boro": "Queens", "building": "37-04", "street": "OTHER ST",
                     "zipcode": "11372", "nta": "QN99", "last_inspected": "2026-01-01T00:00:00.000"}]
     assert SpineIndex(parse_rows(rows)).nta_at("11372", "37-04 74th St, NY 11372") is None
+
+
+def test_shared_phone_prefers_the_branch_in_this_zip():
+    rows = ROWS + [{"camis": "0", "dba": "LE BERNARDIN PRIVE", "boro": "Manhattan", "building": "1", "street": "X",
+                    "zipcode": "10001", "phone": "2125541515", "nta": "MN13",
+                    "last_inspected": "2027-01-01T00:00:00.000"}]
+    rec, _ = SpineIndex(parse_rows(rows)).match("Le Bernardin", "(212) 554-1515", "10019", "155 W 51st St, NY 10019")
+    assert rec["camis"] == "1"

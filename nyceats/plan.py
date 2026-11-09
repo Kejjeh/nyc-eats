@@ -91,11 +91,14 @@ def grid_cells(spine: list[dict]) -> list[dict]:
         pts = [(s["lat"], s["lng"]) for s in spine if s["borough"] == b and s["lat"] and s["lng"]]
         if not pts:
             continue
-        lat0 = min(p[0] for p in pts)
-        lng0 = min(p[1] for p in pts)
+        # A fixed origin (the borough's search-rectangle corner), not the spine's extent: a spine
+        # refresh then moves no cell, so finished nearby items keep their ids and are not re-bought.
+        (lat0, lng0), _ = RECTANGLES[b]
         m_per_deg_lng = M_PER_DEG_LAT * math.cos(math.radians(40.75))
         start = defaultdict(list)
         for lat, lng in pts:
+            if lat < lat0 or lng < lng0:
+                continue  # south or west of the rectangle the borough's searches already use
             y = (lat - lat0) * M_PER_DEG_LAT
             x = (lng - lng0) * m_per_deg_lng
             start[(int(x // START_SIDE_M), int(y // START_SIDE_M))].append((x, y))
