@@ -61,7 +61,8 @@ def inputs(tmp_path, monkeypatch):
     write_json(paths.PLACES, {
         "G1": {"place_id": "G1", "name": "Tiny Spot", "address": "9 A St, Bronx, NY 10458, USA", "rating": 5.0,
                "reviews": 3, "primary_type": "italian_restaurant", "types": ["restaurant"],
-               "business_status": "OPERATIONAL", "found_by": ["themed:goat"], "fetched_at": "2026-11-10T00:00:00Z"},
+               "business_status": "OPERATIONAL", "found_by": ["themed:goat", "themed:tasting-menu"],
+               "summary": "Roast goat and stews", "fetched_at": "2026-11-10T00:00:00Z"},
         "NJ": {"place_id": "NJ", "name": "Hoboken", "address": "1 Washington St, Hoboken, NJ 07030, USA",
                "rating": 4.9, "reviews": 900, "found_by": ["nearby"], "fetched_at": "2026-11-10T00:00:00Z"}})
     return tmp_path
@@ -73,6 +74,8 @@ def test_full_build(inputs):
     rows = {r["id"]: r for r in payload["restaurants"]}
     assert set(rows) == {"LB", "G1"}
     assert meta["left_out"] == {"outside the four boroughs (ZIP not in the City spine)": 1}
+    # "goat" is named, so that theme tags; nothing says tasting menu, so that one is counted, not tagged.
+    assert meta["theme_matches_without_evidence"] == {"tasting-menu": 1}
     lb, g1 = rows["LB"], rows["G1"]
     assert lb["neighborhood"] == "Midtown-Midtown South" and lb["cuisine"] == "French"
     assert lb["awards"] == ["Michelin ★★★ 2025"] and lb["source"] == "roster"
