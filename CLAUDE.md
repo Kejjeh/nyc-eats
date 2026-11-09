@@ -14,13 +14,15 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 
 ```bash
 pip install -r requirements.txt                 # requests, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 119 passed (node tests skip without node)
+python -m pytest tests -q                       # ~1s. Expect: 121 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
 python -m nyceats discover -n 20                # dry run: prints what 20 calls would do, sends nothing
 python -m nyceats discover --live -n 20         # add --pool details/themed/nearby to run one pool. BILLED SKUs, inside the free cap. Owner OK first, every time
 python -m nyceats menus -n 50                   # free, network: read 50 restaurants' own sites -> data/menus.json
+python -m nyceats monthly                       # free: spine + seed + dry run of every pool
+python -m nyceats monthly --live                # the monthly refresh: every pool to its cap, menus, build (scheduled task)
 python -m nyceats build                         # offline: -> docs/data/restaurants.json
 python -m http.server 8771 --directory docs     # view the site; file:// does NOT work (fetch)
 ```
@@ -69,7 +71,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `119 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `121 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (1,016 on 2026-11-09,
    after the first live run); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.
@@ -83,5 +85,6 @@ anything contradicting an ADR. A live `discover` run needs the owner's OK whiche
 
 ## Secrets
 
-The Google key comes from env `GOOGLE_PLACES_KEY` or `GOOGLE_API_KEY` in the gitignored `config.py`
-(copy `config.example.py`). Never commit, print or paste it; CI fails if one is tracked. The repo is public.
+The Google key comes from env `GOOGLE_PLACES_KEY`, else `GOOGLE_API_KEY` in the gitignored `config.py`
+(copy `config.example.py`), else the same name in omakase's gitignored `scripts/config.py` (read only;
+the key every live run so far has used). Never commit, print or paste it; CI fails if one is tracked. The repo is public.

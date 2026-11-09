@@ -240,12 +240,19 @@ def check_site(website: str, fetcher: _Fetcher) -> dict:
     return rec
 
 
-def due(places: dict, menus: dict, today: str, everything: bool = False) -> list[tuple[str, str]]:
-    """(place_id, website) pairs to read now: never read, read for another URL, or older than STALE_DAYS."""
+def due(places: dict, menus: dict, today: str, everything: bool = False,
+        scope: set | None = None) -> list[tuple[str, str]]:
+    """(place_id, website) pairs to read now: never read, read for another URL, or older than STALE_DAYS.
+
+    `scope` limits the crawl to places in the published guide: most places discovery finds are
+    rated below 4.2 or are not restaurants, and their sites are not worth a visit.
+    """
     from datetime import date
     t = date.fromisoformat(today)
     out = []
     for pid, g in sorted(places.items()):
+        if scope is not None and pid not in scope:
+            continue
         site = g.get("website")
         if not site:
             continue
@@ -263,7 +270,9 @@ def crawl(limit: int | None = None, everything: bool = False, fetcher: _Fetcher 
           workers: int = WORKERS) -> dict:
     places = read_json(paths.PLACES, default={})
     menus = read_json(paths.MENUS, default={})
-    todo = due(places, menus, now_iso()[:10], everything)[: limit or None]
+    site = read_json(paths.SITE_DATA, default={"restaurants": None})
+    scope = {r["id"] for r in site["restaurants"]} if site["restaurants"] is not None else None
+    todo = due(places, menus, now_iso()[:10], everything, scope)[: limit or None]
     fetcher = fetcher or _Fetcher()
     statuses: Counter = Counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:

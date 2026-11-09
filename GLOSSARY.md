@@ -16,6 +16,9 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Pool** — one stream of planned calls on one SKU: `details`, `themed`, `nearby`.
 - **Discovery plan** — every planned call as items with stable ids; finished items are recorded in
   `data/discovery_state.json` and never repeated.
+- **Stale item** — a finished plan item last run 28+ days ago (`discover.REFRESH_DAYS`). Runs after every
+  never-run item of its pool, oldest first, so the monthly refresh re-checks the oldest data once the plan
+  is done. A failed lookup is not retried.
 - **Theme** — a priority search ("tasting menu", "wagyu") whose results get a **category** on the page.
 - **Category** — the kind of meal a theme stands for: Tasting menu, Prix fixe, Omakase & chef's counter,
   Fine dining, Unusual proteins. Means Google returned it for that search AND its listing gives evidence
