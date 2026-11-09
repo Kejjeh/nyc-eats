@@ -83,3 +83,27 @@ def test_shared_phone_prefers_the_branch_in_this_zip():
                     "last_inspected": "2027-01-01T00:00:00.000"}]
     rec, _ = SpineIndex(parse_rows(rows)).match("Le Bernardin", "(212) 554-1515", "10019", "155 W 51st St, NY 10019")
     assert rec["camis"] == "1"
+
+
+
+def test_latest_graded_inspection_wins_and_pending_letters_are_not_grades():
+    from nyceats.spine import latest_grades
+    rows = [{"camis": "1", "grade": "B", "last_graded": "2025-12-01T00:00:00.000"},
+            {"camis": "1", "grade": "A", "last_graded": "2026-06-10T00:00:00.000"},
+            {"camis": "2", "grade": "Z", "last_graded": "2026-07-01T00:00:00.000"},
+            {"camis": "3", "grade": "C", "last_graded": None}]
+    assert latest_grades(rows) == {"1": {"grade": "A", "grade_date": "2026-06-10"}}
+
+
+def test_neighborhood_near_a_point_needs_two_agreeing_neighbours():
+    base = {"borough": "Queens", "building": "1", "street": "X", "zip": "11372", "phone": None, "cuisine": None,
+            "last_inspected": "2026-01-01"}
+    spine = [dict(base, camis="a", name="A", nta="QN28", lat=40.75000, lng=-73.89000),
+             dict(base, camis="b", name="B", nta="QN28", lat=40.75050, lng=-73.89050),
+             dict(base, camis="c", name="C", nta="QN29", lat=40.76000, lng=-73.88000)]
+    idx = SpineIndex(spine)
+    assert idx.nta_near(40.75020, -73.89020) == "QN28"     # two neighbours within 120 m agree
+    assert idx.nta_near(40.76000, -73.88010) is None       # only one neighbour: not enough
+    spine.append(dict(base, camis="d", name="D", nta="QN30", lat=40.75030, lng=-73.89000))
+    assert SpineIndex(spine).nta_near(40.75020, -73.89020) is None  # neighbours disagree: a boundary
+    assert idx.nta_near(None, None) is None
