@@ -117,3 +117,31 @@ def test_decode_follows_the_charset_and_falls_back_to_windows_1252():
 def test_due_reads_only_places_in_the_guide_when_given_a_scope():
     places = {"in": {"website": "https://in.nyc"}, "out": {"website": "https://out.nyc"}}
     assert menus.due(places, {}, "2026-11-09", scope={"in"}) == [("in", "https://in.nyc")]
+
+
+
+def test_real_false_matches_from_the_november_crawl_are_not_evidence():
+    # Black Forest Brooklyn, Superfine: a 3-course family meal and a one-night holiday menu.
+    ev, _ = menus.find_evidence("The German Family Feast for $38/person: A 3 course family-style meal.\n"
+                                "2026 THANKSGIVING DINNER PRIX FIXE")
+    assert ev == {}
+    # Forsythia, Omakase OSUKAA, Le Coucou: still evidence.
+    ev, _ = menus.find_evidence("$ 98 (5 courses)\nOmakase 10 Course\nDinner Prix Fixe")
+    assert set(ev) == {"tasting-menu", "omakase", "prix-fixe"}
+
+
+
+def test_build_rechecks_evidence_an_older_rule_accepted():
+    old = ok_menu(**{"prix-fixe": "2026 THANKSGIVING DINNER PRIX FIXE", "tasting-menu": "A 3 course family meal",
+                     "omakase": "Edomae Omakase"})
+    g = {"name": "X", "primary_type": "restaurant", "found_by": ["details"]}
+    assert category_reasons(g, [], old) == {"Omakase & chef's counter": "restaurant's own site"}
+
+
+
+def test_a_long_sentence_keeps_the_words_that_matched():
+    long = "Set against a striking 1931 mosaic, the room evolves through the day " * 4 + "into an intimate omakase."
+    ev, _ = menus.find_evidence(long)
+    assert "omakase" in ev["omakase"] and ev["omakase"].startswith("…") and len(ev["omakase"]) <= 221
+    # A first-crawl sentence cut at 220 from its start keeps its standing; the one-off check still applies.
+    assert menus.current_evidence(ok_menu(omakase=long[:220])) == {"omakase": long[:220]}

@@ -37,3 +37,12 @@ In `build`:
   its URL changed, or it was read 30+ days ago.
 - Many restaurant sites render menus with JavaScript or as PDFs; those stay "not checked". Reading
   PDFs is a possible follow-up.
+
+## Amendment (2026-11-09, after the first full crawl)
+
+A sample of the 3,431 sites the first crawl read showed two kinds of false evidence: "3-course" lunches
+and family meals counted as tasting menus, and one-night holiday menus ("2026 THANKSGIVING DINNER PRIX
+FIXE") counted as prix fixe. Now a course count is evidence only from 5 courses up, and a sentence that
+names a holiday or event (`menus.ONE_OFF`) is never evidence. Since sites are re-read only monthly,
+`build` re-checks every stored sentence against the current rule (`menus.current_evidence`). Effect on
+the November crawl: tasting-menu sentences 295 → 173, prix-fixe 322 → 288, omakase unchanged at 186.
