@@ -2,20 +2,19 @@
 
 ## State (2026-11-09)
 
-Built: spine, seed, ledger, discovery (dry run tested; live path tested against a fake Google), build,
-and the page. The payload holds the 977 roster rows only; **no Google call has been made by the
-guide's code.** The ledger starts at the 29 recon-probe calls of 2026-11-09.
+**Live at https://kejjeh.github.io/nyc-eats/** (GitHub Pages, main `/docs`), since 2026-11-09.
+Code: PR #1. Data from the first live run: PR #2. The payload holds 1,016 restaurants, 97 with Google
+details; 82 are tagged "Tasting menu". The ledger holds the 29 recon-probe calls plus the 7 live calls.
 
 ## Next
 
-1. **First live run done (2026-11-09, owner OK):** 7 themed calls, 99 places; outputs on branch
-   `data/first-live-run` (not yet pushed). Next live runs need the owner's OK each time. Left in
-   November: 947 details + 159 themed + 368 nearby calls, all inside the free tier ($0.00).
-2. Enable GitHub Pages (main, `/docs`) once the build PR is merged.
-3. Monthly run (a scheduled task on this PC, owner to approve): spine, seed, `discover --live` up to the
+1. **Next live run (needs the owner's OK each time).** The first (2026-11-09) was 7 themed
+   "tasting menu" calls, 99 places. Left in November: 947 details + 159 themed + 368 nearby calls,
+   all inside the free tier ($0.00). Each run's outputs go in a data-only PR, apart from code.
+2. Monthly run (a scheduled task on this PC, owner to approve): spine, seed, `discover --live` up to the
    cap, build, commit. Pools refresh oldest-first once the plan is exhausted (not written yet).
-4. Menu crawl to verify categories on restaurant websites. Priority: about half of the 53 tasting-menu tags that rest on price alone look wrong (ADR 0003 follow-up).
-5. `recommend` CLI and an "ask Claude" box on the page (the chat-query goal).
+3. Menu crawl to verify categories on restaurant websites. Priority: about half of the 53 tasting-menu tags that rest on price alone look wrong (ADR 0003 follow-up).
+4. `recommend` CLI and an "ask Claude" box on the page (the chat-query goal).
 
 ## Open owner decisions
 
