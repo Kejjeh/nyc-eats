@@ -26,7 +26,7 @@ def read_roster(db_path: Path) -> list[dict]:
     con.row_factory = sqlite3.Row
     try:
         venues = con.execute(
-            "SELECT venue_slug, name, address, borough, neighborhood, status, place_id, rating, "
+            "SELECT venue_slug, name, address, lat, lng, borough, neighborhood, status, place_id, rating, "
             "user_ratings_total, resolution, rw_slug, top_honor_label FROM venues").fetchall()
         awards: dict[str, list[dict]] = {}
         for a in con.execute("SELECT venue_slug, source, level, award, year FROM venue_awards "
@@ -54,6 +54,7 @@ def select(roster: list[dict]) -> tuple[list[dict], Counter]:
             continue
         kept.append({
             "place_id": v["place_id"], "name": v["name"], "address": v["address"], "borough": borough,
+            "lat": v.get("lat"), "lng": v.get("lng"),
             "rw_neighborhood": v["neighborhood"], "rating": v["rating"], "reviews": v["user_ratings_total"],
             "restaurant_week": bool(v["rw_slug"]), "top_honor": v["top_honor_label"], "awards": v["awards"],
             "rw_slug": v["venue_slug"],

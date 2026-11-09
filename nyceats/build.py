@@ -124,7 +124,8 @@ def build(write: bool = True) -> dict:
             "delivery": (g or {}).get("delivery"), "takeout": (g or {}).get("takeout"),
             "reservable": (g or {}).get("reservable"),
             "summary": (g or {}).get("summary"),
-            "lat": (g or {}).get("lat"), "lng": (g or {}).get("lng"),
+            "lat": (g or {}).get("lat") if g and g.get("lat") is not None else (s or {}).get("lat"),
+            "lng": (g or {}).get("lng") if g and g.get("lng") is not None else (s or {}).get("lng"),
             "source": "google" if g else "roster",
             "checked": ((g or {}).get("fetched_at") or "")[:10] or None,
         })

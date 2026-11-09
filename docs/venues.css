@@ -1,0 +1,316 @@
+/* NYC award-recognised restaurants — roster
+ *
+ * Layered on styles.css, which owns the palette, the masthead, the controls
+ * bar and the buttons. Nothing here redefines a token: the two pages must stay
+ * one site, and the viewer's theme choice carries across them.
+ *
+ * The design problem this file solves is absence. A Restaurant Week row has a
+ * price, a menu, a gap and a subway walk; most rows here have a name, some
+ * awards, and nothing else. So the row is built to read well at its THINNEST
+ * — the honour badge and the name carry it, and every other element simply
+ * does not render when its field is missing, rather than printing a dash or a
+ * zero that looks like a measurement.
+ *
+ * Honour colour is by JURY, not by rank, and never carries meaning alone: the
+ * badge always spells the honour out. Rank is carried by sort order and by the
+ * text, so the page works in greyscale and for a colour-blind reader.
+ */
+
+.crosslink {
+  font: 500 13px/1 var(--sans);
+  color: var(--accent);
+  text-decoration: none;
+  padding: 6px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r);
+  white-space: nowrap;
+}
+.crosslink:hover { background: var(--accent-sub); }
+.crosslink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- rows -------------------------------------------------------- */
+
+.venueRows { display: flex; flex-direction: column; gap: 10px; }
+
+.venue {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 13px 15px;
+  box-shadow: var(--shadow);
+}
+
+.venueHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.venueName {
+  font: 600 17px/1.25 var(--sans);
+  color: var(--ink);
+  margin: 0;
+  /* The name must win the row even next to three badges. */
+  flex: 0 1 auto;
+}
+
+.pill {
+  font: 500 11.5px/1 var(--mono);
+  letter-spacing: .01em;
+  padding: 4px 7px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* By jury. The badge text always names the honour, so these are a scanning
+   aid and never the only carrier of the fact. */
+.pill.honor.michelin { background: var(--crit-sub);   color: var(--crit);   border-color: var(--crit); }
+.pill.honor.beard    { background: var(--warn-sub);   color: var(--warn);   border-color: var(--warn); }
+.pill.honor.nyt      { background: var(--accent-sub); color: var(--accent); border-color: var(--accent); }
+
+/* Trading state is a SHAPE as much as a colour: open is quiet and unbordered,
+   closed is struck through, unverified is dashed — the same "we do not know"
+   grammar the dashboard uses for an estimated price. */
+.pill.status-open      { color: var(--ink-3); background: var(--surface-2); }
+.pill.status-closed    { color: var(--ink-2); background: var(--surface-2);
+                         text-decoration: line-through; }
+.pill.status-unknown   { color: var(--ink-3); background: transparent;
+                         border: 1px dashed var(--rule-strong); }
+/* A temporary closure is not a closure. It keeps the closed pill's quiet
+   colour so it still reads as "you cannot eat here now", and drops the
+   line-through, which is the mark this page uses for gone for good. */
+.pill.status-closed.temporary { text-decoration: none; font-style: italic; }
+
+.pill.rw {
+  background: var(--value-sub);
+  color: var(--value);
+  border-color: var(--value);
+  text-decoration: none;
+}
+.pill.rw:hover { filter: brightness(1.04); text-decoration: underline; }
+.pill.rw:focus-visible { outline: 2px solid var(--value); outline-offset: 2px; }
+
+/* A programme that has finished is not an offer. The live pill borrows the
+   dashboard's "value" green — the loudest colour either page has for "this is
+   worth money" — and over a season that closed thirteen days ago that green is
+   advertising something nobody can buy. Ended keeps the price and drops the
+   green, into the same quiet ink the status pills use for "you cannot eat here
+   now"; unknown takes the dashed border this page already uses for "we do not
+   know", the same grammar as the Unverified pill two rules up. Both stay
+   links, because the archived listing behind them is still worth reading. */
+.pill.rw.ended {
+  background: var(--surface-2); color: var(--ink-3); border-color: var(--rule-strong);
+}
+.pill.rw.unknown {
+  background: transparent; color: var(--ink-3);
+  border: 1px dashed var(--rule-strong);
+}
+.pill.rw.ended:focus-visible,
+.pill.rw.unknown:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.venueMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 7px 0 0;
+  font: 400 13px/1.4 var(--sans);
+  color: var(--ink-2);
+}
+.venueMeta .rating,
+.venueMeta .era,
+.venueMeta .juries {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+/* Set in the mono voice the rest of the row's data uses, so it reads as
+   evidence from the menu rather than as prose about the restaurant. */
+.venueMeta .dishes {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* Dashed underline is this site's existing grammar for "we are less sure",
+   carried over from the dashboard's estimated prices. Never colour alone. */
+.venueMeta .dishesMaybe {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  border-bottom: 1px dashed var(--rule-strong);
+  cursor: help;
+}
+
+/* The only outbound action on a row, so it reads as a control rather than as
+   another piece of metadata -- but quietly, because 771 rows do not have one
+   and a loud button would make their absence look like a fault. */
+.venueMeta .reserve {
+  font: 500 12px/1 var(--sans);
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-sub);
+}
+.venueMeta .reserve:hover { border-bottom-color: currentColor; }
+.venueMeta .reserve:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- award detail ------------------------------------------------ */
+
+.awards { margin-top: 9px; }
+.awards > summary {
+  font: 500 12.5px/1 var(--sans);
+  color: var(--accent);
+  cursor: pointer;
+  padding: 3px 0;
+  width: fit-content;
+}
+.awards > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.awardList {
+  list-style: none;
+  margin: 8px 0 2px;
+  padding: 0 0 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-left: 2px solid var(--rule-2);
+  padding-left: 12px;
+}
+.awardRow {
+  display: grid;
+  grid-template-columns: 4.2em minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  font: 400 12.5px/1.5 var(--sans);
+}
+.awardYear {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.awardWhat { color: var(--ink-2); }
+a.awardWhat { color: var(--accent); text-decoration: none; }
+a.awardWhat:hover { text-decoration: underline; }
+/* The chef, when the award was to a person. Right-aligned so a scan down the
+   column separates "the restaurant won this" from "its chef did". */
+.awardWho {
+  font: 400 12px/1.5 var(--mono);
+  color: var(--ink-3);
+  text-align: right;
+}
+
+/* ---------- filter panel ------------------------------------------------ */
+
+.facets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px 22px;
+  padding: 4px 0 2px;
+}
+.facet h3 {
+  font: 600 11px/1 var(--sans);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+.facetOpt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+  font: 400 13px/1.3 var(--sans);
+  color: var(--ink);
+  cursor: pointer;
+}
+.facetOpt:hover { color: var(--accent); }
+.facetName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facetN {
+  font: 400 11.5px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+/* A cut list must say it was cut. Quiet, but never absent. */
+.facetMore {
+  margin: 6px 0 0;
+  font: 400 11.5px/1.4 var(--sans);
+  color: var(--ink-3);
+}
+
+.preset {
+  font: 500 12.5px/1 var(--sans);
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.preset:hover { border-color: var(--accent); color: var(--accent); }
+.preset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.chip {
+  font: 500 12px/1 var(--sans);
+  background: var(--accent-sub);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 560px) {
+  .awardRow { grid-template-columns: 3.6em minmax(0, 1fr); }
+  .awardWho { grid-column: 2; text-align: left; }
+  .crosslink { display: none; }   /* the footer links back; the bar is full */
+}
+
+/* ---------- map view ----------------------------------------------------
+   No tile server and no map library: the borough shoreline is local SVG and
+   the dots are the same rows the list renders, colored by the same three
+   statuses the pills use. */
+.viewToggle { display: inline-flex; gap: 0; margin-right: 0.75rem; }
+.viewToggle .btn { border-radius: 0; }
+.viewToggle .btn:first-child { border-radius: 6px 0 0 6px; }
+.viewToggle .btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.viewToggle .btn[aria-pressed="true"] {
+  background: var(--accent-sub);
+  color: var(--accent);
+  border-color: var(--accent);
+  position: relative;         /* keep the shared edge's accent on top */
+}
+
+.mapWrap svg {
+  display: block;
+  width: 100%;
+  max-width: 46rem;
+  height: auto;
+  margin: 0 auto;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.mapLand path {
+  fill: var(--surface);
+  stroke: var(--ink-3);
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+}
+.mapDots .dot { cursor: pointer; }
+.mapDots .dot.open    { fill: var(--accent); fill-opacity: 0.85; }
+.mapDots .dot.closed  { fill: var(--crit);   fill-opacity: 0.55; }
+.mapDots .dot.unknown { fill: var(--ink-3);  fill-opacity: 0.45; }
+.mapDots .dot:hover { stroke: var(--ink); stroke-width: 1.2; }
+
+.mapGaps {
+  margin: 0.6rem 0 0.9rem;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  text-align: center;
+}

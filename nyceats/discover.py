@@ -26,7 +26,8 @@ def pending(plan: list[dict], state: dict) -> list[dict]:
     return [it for it in plan if it["id"] not in state]
 
 
-def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | None) -> list[dict]:
+def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | None,
+             pool: str | None = None) -> list[dict]:
     """The items the next run would take: pools in order, each until its SKU's headroom runs out.
 
     A themed item can need up to 3 calls (pages), so it is only scheduled when
@@ -37,6 +38,8 @@ def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | Non
     room = {pool: ledger.remaining(POOL_SKU[pool]) for pool in POOLS}
     out = []
     for it in pending(plan, state):
+        if pool and it["pool"] != pool:
+            continue
         need = it["pages"]
         if need > budget or need > room[it["pool"]]:
             continue
@@ -46,12 +49,12 @@ def schedule(plan: list[dict], state: dict, ledger: Ledger, max_calls: int | Non
     return out
 
 
-def dry_run(max_calls: int | None, ledger: Ledger | None = None) -> str:
+def dry_run(max_calls: int | None, ledger: Ledger | None = None, pool: str | None = None) -> str:
     ledger = ledger or Ledger()
     sp, seed, state = load_inputs()
     plan = build_plan(sp, seed)
     todo = pending(plan, state)
-    sched = schedule(plan, state, ledger, max_calls)
+    sched = schedule(plan, state, ledger, max_calls, pool)
     lines = [f"Billing month {billing_month()} (Pacific).",
              f"{'pool':8} {'SKU':38} {'used':>5} {'left':>5} {'items left':>10} {'calls (max)':>11} "
              f"{'this run':>8}"]
@@ -106,13 +109,14 @@ def run_item(client: Client, it: dict, places: dict, now: str) -> dict:
     return {"ran_at": now, "calls": calls, "results": results, "new": new}
 
 
-def run_live(max_calls: int, *, client: Client | None = None, ledger: Ledger | None = None) -> dict:
+def run_live(max_calls: int, *, client: Client | None = None, ledger: Ledger | None = None,
+             pool: str | None = None) -> dict:
     from .keys import google_key
     ledger = ledger or Ledger()
     client = client or Client(google_key(), ledger)
     sp, seed, state = load_inputs()
     places = read_json(paths.PLACES, default={})
-    sched = schedule(build_plan(sp, seed), state, ledger, max_calls)
+    sched = schedule(build_plan(sp, seed), state, ledger, max_calls, pool)
     summary = Counter()
     stopped = None
     for it in sched:

@@ -8,3 +8,4 @@ config.py.bak
 # Regenerate it with `python -m nyceats spine` (free) rather than growing git history weekly.
 data/city/dohmh.json
 .pytest_cache/
+.claude/

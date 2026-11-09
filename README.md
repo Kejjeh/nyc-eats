@@ -4,7 +4,8 @@ A public, always-current guide to good NYC restaurants: one place to find somewh
 from, near home or near a friend, and a data store a Claude chat can query for recommendations
 ("Italian, $$, open past 10, near this address").
 
-**Status (2026-11-09): design settled, nothing built yet.** This README records the upstream
+**Status (2026-11-09): pipeline and page built; the guide shows the 977-row award roster until the
+first live discovery run.** Agents: start at `CLAUDE.md`. This README records the upstream
 measurements the design rests on (`sop-verify-upstream`); decisions are in `docs/adr/`.
 
 ## Decisions already made (owner, 2026-11-09)

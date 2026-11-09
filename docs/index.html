@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Before every link and script, or they are fetched before the policy exists.
+     The one outside origin is NYC GeoSearch (free, the city's own geocoder), for
+     "near an address". No map tiles, no CDN, no analytics. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self';
+  style-src 'self';
+  img-src 'self' data:;
+  connect-src 'self' https://geosearch.planninglabs.nyc;
+  base-uri 'none';
+  form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive, noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>NYC Eats</title>
+<meta name="description" content="The best sit-down restaurants in the Bronx, Manhattan, Brooklyn and Queens: tasting menus, prix fixe, omakase, unusual proteins. Personal, non-commercial tool.">
+<meta name="theme-color" content="#0d6a5f" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151d1c" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="venues.css?v=1">
+<link rel="stylesheet" href="eats.css?v=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d6a5f'/%3E%3Ctext x='8' y='12' font-family='monospace' font-size='10' font-weight='bold' fill='%23fff' text-anchor='middle'%3E%E2%98%85%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>NYC Eats</h1>
+    <span class="season" id="rosterCount">the best of the four boroughs</span>
+    <span class="spacer"></span>
+    <a class="crosslink" href="https://kejjeh.github.io/nyc-restaurants/restaurant-week.html">Restaurant Week →</a>
+    <button type="button" class="themeToggle" id="themeToggle" aria-label="Switch colour theme">Theme</button>
+  </div>
+</header>
+
+<noscript>
+  <div class="wrap"><div class="banner">
+    <p><strong>This page needs JavaScript.</strong> The list, filters and counts are built in the
+       browser from <code>docs/data/restaurants.json</code>.</p>
+  </div></div>
+</noscript>
+
+<div class="controls">
+  <div class="wrap">
+    <div class="searchRow">
+      <input type="search" class="search" id="q" autocomplete="off" spellcheck="false"
+             placeholder="Search name, cuisine, neighborhood, award…  (press /)" aria-label="Search restaurants">
+      <button type="button" class="btn" id="filterBtn" aria-expanded="false" aria-controls="panel">
+        Filters<span class="n" id="filterCount" hidden>0</span>
+      </button>
+      <label class="sr-only" for="sort">Sort by</label>
+      <select class="sortSel" id="sort" aria-label="Sort by">
+        <option value="score">Best — rating weighted by reviews</option>
+        <option value="rating">Google rating — raw</option>
+        <option value="reviews">Most reviewed</option>
+        <option value="distance">Nearest (set an address)</option>
+        <option value="name">Name — A to Z</option>
+      </select>
+    </div>
+    <div class="searchRow eatsRow">
+      <label class="eatsField">Rated
+        <select id="minRating" aria-label="Minimum Google rating">
+          <option value="4.2">4.2+</option><option value="4.3">4.3+</option><option value="4.4">4.4+</option>
+          <option value="4.5" selected>4.5+</option><option value="4.6">4.6+</option><option value="4.7">4.7+</option>
+        </select>
+      </label>
+      <button type="button" class="btn" id="openNow" aria-pressed="false">Open now</button>
+      <form class="nearForm" id="nearForm">
+        <input type="search" class="search near" id="near" autocomplete="street-address" spellcheck="false"
+               placeholder="Near an address or place" aria-label="Near an address">
+        <select id="radius" aria-label="Within">
+          <option value="0.5">½ mi</option><option value="1" selected>1 mi</option>
+          <option value="2">2 mi</option><option value="5">5 mi</option><option value="0">any distance</option>
+        </select>
+        <button type="submit" class="btn">Go</button>
+        <button type="button" class="btn" id="hereBtn" title="Use this device's location">Here</button>
+        <button type="button" class="linkish" id="nearClear" hidden>clear</button>
+      </form>
+    </div>
+    <p class="nearStatus" id="nearStatus" role="status" aria-live="polite"></p>
+
+    <section class="panel" id="panel" hidden aria-label="Filters">
+      <div class="facets" id="facets"></div>
+    </section>
+  </div>
+</div>
+
+<div class="subbar">
+  <div class="wrap">
+    <div class="viewToggle" role="group" aria-label="View">
+      <button type="button" class="btn" id="viewList" aria-pressed="true">List</button>
+      <button type="button" class="btn" id="viewMap" aria-pressed="false">Map</button>
+    </div>
+    <div class="presets" id="presets" role="group" aria-label="Quick views"></div>
+    <div class="activeFilters" id="activeFilters" hidden aria-label="Active filters"></div>
+    <div class="statusbar" role="status" aria-live="polite" aria-atomic="true">
+      <span><strong id="shown">0</strong> of <strong id="total">0</strong> restaurants</span>
+      <button type="button" class="linkish" id="clearBtn" hidden>Clear filters</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap results">
+  <div class="banner quiet" id="coverage" hidden></div>
+  <section id="mapView" hidden aria-label="Map of the current selection">
+    <div id="mapWrap" class="mapWrap"></div>
+    <p id="mapGaps" class="mapGaps"></p>
+    <div id="mapDetail" class="venueRows"></div>
+  </section>
+  <div id="rows" class="venueRows"></div>
+  <button type="button" class="showMore" id="showMore" hidden></button>
+  <div class="empty" id="empty" hidden>
+    <p id="emptyMsg">Nothing matches those filters.</p>
+    <button type="button" class="btn" id="clearBtn2">Clear filters</button>
+  </div>
+</main>
+
+<button type="button" class="toTop" id="toTop" hidden aria-label="Back to top">↑ Top</button>
+
+<footer class="foot">
+  <div class="wrap">
+    <p id="footProvenance"></p>
+    <p><strong>Best</strong> shrinks each Google rating toward the guide's average by 150 reviews of doubt,
+       so a 4.9 from 30 people does not outrank a 4.7 from 3,000. <strong>Categories</strong> such as
+       "Tasting menu" mean Google returned the restaurant for that search; they are not yet checked
+       against a menu. Neighborhoods come from the city's health-inspection records.</p>
+    <p>Ratings, hours and links are Google's, dated on each row. Personal, non-commercial tool.</p>
+  </div>
+</footer>
+
+<script src="core.js?v=1"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>

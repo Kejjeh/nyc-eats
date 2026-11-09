@@ -123,3 +123,8 @@ def test_live_run_counts_every_call_in_the_ledger_and_resumes(sandbox):
     discover.run_live(2, client=Client("k", Ledger(paths.LEDGER), session=session2, pause=0),
                       ledger=Ledger(paths.LEDGER))
     assert not any("places/P" in url for url, _ in session2.sent)
+
+
+def test_pool_option_schedules_only_that_pool(tmp_path):
+    sched = discover.schedule(build_plan(SPINE, SEED), {}, Ledger(tmp_path / "l.json"), 10, pool="nearby")
+    assert sched and all(i["pool"] == "nearby" for i in sched)

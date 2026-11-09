@@ -13,10 +13,11 @@ from nyceats.seed import read_roster, select
 def _db(tmp_path, venues):
     p = tmp_path / "rw.sqlite"
     con = sqlite3.connect(p)
-    con.execute("CREATE TABLE venues (venue_slug, name, address, borough, neighborhood, status, place_id, "
+    con.execute("CREATE TABLE venues (venue_slug, name, address, lat, lng, borough, neighborhood, status, place_id, "
                 "rating, user_ratings_total, resolution, rw_slug, top_honor_label)")
     con.execute("CREATE TABLE venue_awards (venue_slug, source, level, award, year)")
-    con.executemany("INSERT INTO venues VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", venues)
+    con.executemany("INSERT INTO venues VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    [v[:3] + (40.76, -73.98) + v[3:] for v in venues])
     con.execute("INSERT INTO venue_awards VALUES ('le-bern','michelin','3 stars',NULL,2025)")
     con.commit()
     con.close()

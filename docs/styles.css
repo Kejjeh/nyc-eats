@@ -1,0 +1,988 @@
+/* NYC Restaurant Week — value dashboard
+ *
+ * Design notes (deliberate choices, not defaults):
+ *  - Ground: near-neutral paper with a faint TEAL bias, so the neutral reads as
+ *    chosen rather than inherited. Accent is petrol teal — kept clear of the
+ *    semantic hues so red can mean "deadline" and green can mean "value"
+ *    without fighting the brand colour.
+ *  - Type: two roles from system stacks (no webfont — this is a data tool that
+ *    must load instantly and never flash). Mono carries every number, tier and
+ *    date: the price-sticker voice the subject actually speaks in. Sans carries
+ *    prose. tabular-nums everywhere digits stack.
+ *  - State is encoded in FORM, not colour alone: a verified gap is a solid
+ *    figure; a heuristic one is dashed and labelled "est."; an absent one is an
+ *    explicit em-dash. Colour-blind and greyscale safe.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --paper:      #f4f7f6;
+  --surface:    #ffffff;
+  --surface-2:  #eef3f1;
+  --ink:        #141d1b;
+  --ink-2:      #55645f;
+  --ink-3:      #63716b;   /* >=4.5:1 on --surface; was #7d8a85 (~3.2:1) */
+  --rule:       #d8e2de;   /* decorative separators */
+  --rule-2:     #e8efec;
+  --rule-strong:#818f8a;   /* >=3:1 — boundaries of INTERACTIVE controls */
+
+  --accent:     #0d6a5f;
+  --accent-ink: #ffffff;
+  --accent-sub: #e3f0ed;
+
+  --value:      #1c7a3e;
+  --value-sub:  #e4f2e8;
+  --warn:       #96610a;
+  --warn-sub:   #f8efdc;
+  --crit:       #b0261d;
+  --crit-sub:   #fbe7e5;
+
+  --shadow: 0 1px 2px rgb(20 29 27 / .06), 0 4px 12px rgb(20 29 27 / .04);
+
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --r: 6px;
+  --pad: 14px;
+  --maxw: 1180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:      #0e1413;
+    --surface:    #151d1c;
+    --surface-2:  #1c2624;
+    --ink:        #e7eeeb;
+    --ink-2:      #9daca7;
+    --ink-3:      #8b9994;
+    --rule:       #2a3634;
+    --rule-2:     #212c2a;
+    --rule-strong:#61716d;
+
+    --accent:     #4ecdbb;
+    --accent-ink: #06201d;
+    --accent-sub: #14312d;
+
+    --value:      #5fc27e;
+    --value-sub:  #142c1d;
+    --warn:       #d9a441;
+    --warn-sub:   #2f2617;
+    --crit:       #ef6a5e;
+    --crit-sub:   #331a19;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 12px rgb(0 0 0 / .3);
+  }
+}
+
+/* The viewer's explicit toggle must win over the OS preference, both ways. */
+:root[data-theme="light"] {
+  /* re-declare, or native controls (select, date picker, scrollbars) keep
+     rendering for the OS theme while the page renders for the forced one */
+  color-scheme: light;
+  --paper: #f4f7f6; --surface: #ffffff; --surface-2: #eef3f1;
+  --ink: #141d1b; --ink-2: #55645f; --ink-3: #63716b;
+  --rule: #d8e2de; --rule-2: #e8efec; --rule-strong: #818f8a;
+  --accent: #0d6a5f; --accent-ink: #ffffff; --accent-sub: #e3f0ed;
+  --value: #1c7a3e; --value-sub: #e4f2e8;
+  --warn: #96610a; --warn-sub: #f8efdc;
+  --crit: #b0261d; --crit-sub: #fbe7e5;
+  --shadow: 0 1px 2px rgb(20 29 27 / .06), 0 4px 12px rgb(20 29 27 / .04);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0e1413; --surface: #151d1c; --surface-2: #1c2624;
+  --ink: #e7eeeb; --ink-2: #9daca7; --ink-3: #8b9994;
+  --rule: #2a3634; --rule-2: #212c2a; --rule-strong: #61716d;
+  --accent: #4ecdbb; --accent-ink: #06201d; --accent-sub: #14312d;
+  --value: #5fc27e; --value-sub: #142c1d;
+  --warn: #d9a441; --warn-sub: #2f2617;
+  --crit: #ef6a5e; --crit-sub: #331a19;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 4px 12px rgb(0 0 0 / .3);
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* padding-INLINE, not the `padding` shorthand: the shorthand also resets
+   padding-block, silently cancelling .results' vertical padding wherever a
+   .wrap rule of equal specificity comes later in the cascade. */
+.wrap {
+  max-width: var(--maxw); margin: 0 auto;
+  padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- masthead ---------------------------------------------------- */
+
+.masthead {
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+.masthead .wrap {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
+  padding-block: 14px 12px;
+}
+.masthead h1 {
+  margin: 0; font-size: 17px; font-weight: 620; letter-spacing: -0.01em;
+}
+.masthead .season {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+/* The label becomes a control only when there is more than one season to pick
+   between; it has to keep reading as part of the masthead, not as a form. */
+.masthead select.season {
+  font: inherit; font-family: var(--mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-2); background: var(--surface-2);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+  padding: 2px 5px; cursor: pointer; align-self: center;
+}
+.masthead select.season:hover { color: var(--ink); border-color: var(--ink-3); }
+.masthead .spacer { flex: 1 1 auto; }
+
+.themeToggle {
+  font: inherit; font-size: 12px;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+  padding: 4px 9px; cursor: pointer;
+}
+.themeToggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ---------- controls ---------------------------------------------------- */
+
+.controls {
+  position: sticky; top: 0; z-index: 30;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+}
+
+.searchRow {
+  display: flex; gap: 8px; align-items: center;
+  padding-block: 10px;
+}
+
+.search {
+  flex: 1 1 auto; min-width: 0;
+  font: inherit; font-size: 15px;
+  padding: 8px 11px;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+}
+.search::placeholder { color: var(--ink-3); }
+.search:focus { border-color: var(--accent); background: var(--surface); }
+
+.sortSel {
+  font: inherit; font-size: 13px;
+  padding: 8px 9px; max-width: 46vw;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+}
+
+.btn {
+  font: inherit; font-size: 13px; white-space: nowrap;
+  padding: 8px 11px; cursor: pointer;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn[aria-expanded="true"] { background: var(--accent-sub); border-color: var(--accent); color: var(--accent); }
+.btn .n {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--accent); color: var(--accent-ink);
+  border-radius: 20px; padding: 1px 6px; margin-left: 5px;
+}
+
+/* ---------- quick views + active filters -------------------------------- */
+
+/* Not sticky. Search and Filters stay pinned because you reach for them
+   mid-scroll; quick views and counts are orientation you take once and then
+   scroll past. Pinning all of it left 43% of a phone screen for content. */
+.subbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+.subbar .wrap { padding-top: 9px; }
+
+.presets {
+  display: flex; gap: 6px; padding-bottom: 9px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.presets::-webkit-scrollbar { display: none; }
+
+.preset {
+  font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 5px 11px; border-radius: 20px;
+  color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--rule-strong);
+}
+.preset:hover { border-color: var(--accent); color: var(--accent); }
+.preset .c {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.preset[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink); font-weight: 550;
+}
+.preset[aria-pressed="true"] .c { color: var(--accent-ink); opacity: .8; }
+
+.activeFilters {
+  display: flex; flex-wrap: wrap; gap: 5px; padding-bottom: 9px;
+}
+.activeFilters[hidden] { display: none; }
+
+.afChip {
+  font: inherit; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 6px 3px 9px; border-radius: 20px;
+  color: var(--accent); background: var(--accent-sub);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.afChip .k {
+  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: .06em; opacity: .75;
+}
+.afChip .x {
+  font-size: 14px; line-height: 1; opacity: .7;
+  /* keep the hit area >=24px tall without inflating the chip */
+  padding: 4px; margin: -4px -2px -4px 0;
+}
+.afChip:hover { background: var(--accent); color: var(--accent-ink); }
+.afChip:hover .x { opacity: 1; }
+
+.statusbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  padding-bottom: 9px;
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.statusbar strong { color: var(--ink); font-weight: 600; }
+.linkish {
+  font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* ---------- filter panel ------------------------------------------------ */
+
+.panel {
+  border-top: 1px solid var(--rule-2);
+  background: var(--surface-2);
+  max-height: min(62vh, 560px); overflow-y: auto;
+}
+.panel[hidden] { display: none; }
+.panel .wrap { padding-block: 12px 16px; }
+
+.facets {
+  display: grid; gap: 14px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.facet > h3 {
+  margin: 0 0 6px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3);
+}
+/* Caveat under a facet title — used where the data's coverage is narrower
+   than the filter's name suggests, so the limit is read before the click. */
+.facet > .facetNote {
+  margin: -2px 0 6px;
+  font-size: 11.5px; line-height: 1.35; max-width: 46ch;
+  color: var(--ink-3);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.chip {
+  font: inherit; font-size: 12.5px; line-height: 1.2;
+  padding: 4px 9px; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: 5px;
+  color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--rule-strong); border-radius: 20px;
+}
+.chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.chip .c {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+  font-weight: 550;
+}
+.chip[aria-pressed="true"] .c { color: var(--accent-ink); opacity: .75; }
+
+.facet .scroller { max-height: 172px; overflow-y: auto; padding-right: 2px; }
+
+.dateFacet { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.dateFacet input[type="date"] {
+  font: inherit; font-family: var(--mono); font-size: 12.5px;
+  padding: 5px 7px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+}
+
+/* ---------- results ----------------------------------------------------- */
+
+.results { padding-block: 14px 56px; }
+
+.row {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  margin-bottom: 7px;
+  /* NOT overflow:hidden — it clipped the row header's focus ring entirely,
+     leaving keyboard users with no visible focus. The ::before rail is
+     positioned inside the radius instead. */
+}
+.row > :first-child { border-radius: var(--r) var(--r) 0 0; }
+.row > :last-child  { border-radius: 0 0 var(--r) var(--r); }
+/* the focus ring must sit above the accent rail and neighbouring rows */
+.rowHead:focus-visible { position: relative; z-index: 2; outline-offset: -3px; }
+.row.urgent { border-color: color-mix(in srgb, var(--crit) 45%, var(--rule)); }
+.row.ranked::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 3px;
+  background: var(--accent);
+}
+.row.urgent::before { background: var(--crit); }
+
+.rowHead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  align-items: start;
+  width: 100%;
+  padding: 11px var(--pad);
+  text-align: left;
+  font: inherit; color: inherit;
+  background: none; border: 0; cursor: pointer;
+}
+.rowHead:hover { background: var(--surface-2); }
+
+.rowMain { min-width: 0; }
+
+.nameLine {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+}
+.rname {
+  font-size: 15.5px; font-weight: 600; letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+.rankBadge {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  color: var(--accent-ink); background: var(--accent);
+  border-radius: 3px; padding: 1px 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metaLine {
+  margin-top: 3px;
+  font-size: 12.5px; color: var(--ink-2);
+  display: flex; flex-wrap: wrap; gap: 3px 7px; align-items: baseline;
+}
+.metaLine .sep { color: var(--ink-3); }
+.metaLine .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+
+.pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+.pill {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .03em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 3px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.pill.crit  { background: var(--crit-sub);  color: var(--crit);  border-color: color-mix(in srgb, var(--crit) 35%, transparent); }
+.pill.warn  { background: var(--warn-sub);  color: var(--warn);  border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.pill.value { background: var(--value-sub); color: var(--value); border-color: color-mix(in srgb, var(--value) 35%, transparent); }
+.pill.rec   { background: var(--accent-sub); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.pill.tag   { background: var(--surface-2); color: var(--ink-2); border-color: var(--rule); text-transform: none; letter-spacing: 0; }
+.pill.saved { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pill.quiet { background: var(--surface-2); color: var(--ink-3); border-color: var(--rule); text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+/* the gap column — the number the whole tool exists to surface */
+.gapCell {
+  text-align: right; min-width: 96px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+}
+.gapUsd {
+  font-family: var(--mono); font-size: 21px; font-weight: 600;
+  line-height: 1.1; color: var(--value);
+  font-variant-numeric: tabular-nums;
+}
+.gapPct {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.gapNone { font-family: var(--mono); font-size: 19px; color: var(--ink-3); line-height: 1.1; }
+.gapLabel {
+  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3);
+}
+/* RW costs MORE than the comparable — never render this as a saving */
+.gapCell.over .gapUsd { color: var(--crit); }
+.gapCell.over .gapPct { color: var(--crit); font-weight: 600; }
+
+/* estimate = same figure, different FORM: dashed underline + "est." label */
+.gapCell.est .gapUsd {
+  color: var(--ink-2);
+  border-bottom: 1.5px dashed var(--warn);
+  padding-bottom: 1px;
+}
+.gapCell.est .gapLabel { color: var(--warn); }
+
+/* ---------- detail ------------------------------------------------------ */
+
+.detail {
+  border-top: 1px dashed var(--rule);
+  padding: 12px var(--pad) 14px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.dgrid {
+  display: grid; gap: 9px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  margin-bottom: 11px;
+}
+.dfield > dt {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--ink-3); margin-bottom: 1px;
+}
+.dfield > dd {
+  margin: 0; font-size: 13.5px; overflow-wrap: anywhere;
+}
+.dfield > dd.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+
+.dsec { margin-top: 11px; }
+.dsec > h4 {
+  margin: 0 0 5px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3);
+}
+
+.note {
+  margin: 0 0 10px; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent); border-radius: 0 var(--r) var(--r) 0;
+  font-size: 13px; color: var(--ink-2);
+}
+.note.warn { border-left-color: var(--warn); }
+.note strong { color: var(--ink); }
+
+.snips { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.snip {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  padding: 5px 8px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r);
+}
+.snip q {
+  font-size: 12.5px; color: var(--ink-2); font-style: italic;
+  overflow-wrap: anywhere;
+}
+.awardList {
+  font-size: 12px; color: var(--ink-2); flex: 1 1 100%;
+}
+.snip q mark {
+  background: var(--accent-sub); color: var(--accent);
+  font-style: normal; font-weight: 600; padding: 0 2px; border-radius: 2px;
+}
+
+.linkRow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.linkBtn {
+  font-size: 12.5px; text-decoration: none;
+  padding: 6px 11px; border-radius: var(--r);
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule-strong);
+}
+.linkBtn:hover { border-color: var(--accent); color: var(--accent); }
+.saveBtn { font-variant-numeric: tabular-nums; }
+.saveBtn.on { background: var(--accent-sub); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+.facetFind {
+  width: 100%; font: inherit; font-size: 13px;
+  padding: 7px 10px; margin-bottom: 10px;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+}
+.facet .moreLink {
+  font: inherit; font-size: 11.5px; margin-top: 4px; padding: 0;
+  background: none; border: 0; cursor: pointer;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+}
+
+.linkBtn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 550; }
+.linkBtn.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
+
+.banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 10px 13px; margin-bottom: 12px;
+  background: var(--warn-sub);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: var(--r);
+}
+.banner[hidden] { display: none; }
+/* Same shape, no alarm: a season that has ended is a statement of fact and
+   must not borrow the amber the estimate caveat earns. */
+.banner.quiet { background: var(--surface); border-color: var(--rule); }
+.banner p { margin: 0; flex: 1 1 300px; font-size: 13px; color: var(--ink-2); }
+.banner strong { color: var(--ink); }
+.banner .pill { vertical-align: baseline; }
+.bannerActions { display: flex; align-items: center; gap: 10px; }
+
+/* ---------- deadline group headers -------------------------------------- */
+
+.groupHead {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 16px 0 7px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--rule);
+}
+.groupHead:first-child { margin-top: 2px; }
+.groupHead h2 {
+  margin: 0; font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2);
+}
+.groupHead .n {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.groupHead.urgent h2 { color: var(--crit); }
+
+/* ---------- progressive rendering + back to top ------------------------- */
+
+.showMore {
+  display: block; width: 100%; margin-top: 10px;
+  font: inherit; font-size: 14px; cursor: pointer;
+  padding: 12px; border-radius: var(--r);
+  color: var(--accent); background: var(--surface);
+  border: 1px dashed var(--rule-strong);
+}
+.showMore:hover { border-color: var(--accent); background: var(--accent-sub); }
+.showMore[hidden] { display: none; }
+
+.toTop {
+  position: fixed; z-index: 40;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  font: inherit; font-family: var(--mono); font-size: 12px; cursor: pointer;
+  padding: 9px 13px; border-radius: 20px;
+  color: var(--accent-ink); background: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+.toTop[hidden] { display: none; }
+.toTop:hover { filter: brightness(1.08); }
+
+/* ---------- view switch -------------------------------------------------- */
+
+.viewSeg {
+  display: inline-flex; flex: 0 0 auto;
+  border: 1px solid var(--rule-strong); border-radius: var(--r); overflow: hidden;
+}
+.segBtn {
+  font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+  padding: 8px 11px; border: 0; border-right: 1px solid var(--rule-strong);
+  background: var(--paper); color: var(--ink-2);
+}
+.segBtn:last-child { border-right: 0; }
+.segBtn:hover { color: var(--ink); }
+.segBtn[aria-pressed="true"] {
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+
+/* ---------- overview ----------------------------------------------------- */
+
+.stats[hidden] { display: none; }
+
+.statsNote {
+  margin: 0 0 12px; font-size: 12.5px; color: var(--ink-2);
+}
+
+.tiles {
+  display: grid; gap: 8px; margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+.tile {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r); padding: 11px 13px;
+}
+.tile .n {
+  font-family: var(--mono); font-size: 25px; font-weight: 600; line-height: 1.1;
+  color: var(--ink); font-variant-numeric: tabular-nums; display: block;
+}
+.tile .k {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-3); margin-top: 3px; display: block;
+}
+.tile.crit .n { color: var(--crit); }
+.tile.value .n { color: var(--value); }
+
+.chartGrid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.chart {
+  margin: 0; padding: 13px 14px 10px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r);
+}
+.chart figcaption {
+  font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 12px;
+}
+.chart figcaption span {
+  display: block; font-weight: 400; font-size: 11.5px; color: var(--ink-3);
+  margin-top: 2px; font-family: var(--mono);
+}
+.chart .plot { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+
+/* recessive axes, thin marks */
+.ax        { stroke: var(--rule); stroke-width: 1; }
+.axLabel   { fill: var(--ink-3); font-family: var(--mono); font-size: 10px; }
+.barLabel  { fill: var(--ink-2); font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.bar       { fill: var(--accent); cursor: pointer; }
+.bar.urgent{ fill: var(--crit); }
+.bar:hover { filter: brightness(1.15); }
+.barHit    { fill: transparent; cursor: pointer; }
+/* The hit rect is invisible, so a focus ring drawn on it lands nowhere useful:
+   the ring goes on the rect, and the bar beside it brightens to say which one
+   the keyboard is on. Requires .barHit to be the bar's immediate sibling. */
+.barHit:hover + .bar, .barHit:focus-visible + .bar { filter: brightness(1.15); }
+.barHit:focus-visible { outline-offset: -2px; }
+.seg       { cursor: pointer; }
+.seg:focus-visible { filter: brightness(1.15); }
+.seg.verified { fill: var(--value); }
+.seg.estimate { fill: var(--warn); }
+.seg.none     { fill: var(--ink-3); }
+.seg:hover    { filter: brightness(1.12); }
+
+.chartLegend {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 9px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-2);
+}
+.chartLegend b { font-weight: 600; color: var(--ink); }
+.chartLegend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+.chartLegend i.verified { background: var(--value); }
+.chartLegend i.estimate { background: var(--warn); }
+.chartLegend i.none     { background: var(--ink-3); }
+
+.tipBox {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 5px 8px; border-radius: 4px; white-space: nowrap;
+  transform: translate(-50%, -125%);
+}
+.tipBox[hidden] { display: none; }
+
+/* ---------- plan --------------------------------------------------------- */
+
+.plan[hidden] { display: none; }
+.planSec { margin-bottom: 22px; }
+.planSec h2 {
+  margin: 0 0 4px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3);
+}
+.planSec h2 .n { color: var(--accent); }
+.planNote { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-2); max-width: 64ch; }
+
+.planRow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 11px 13px; margin-bottom: 7px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r);
+}
+.planMain { flex: 1 1 240px; min-width: 0; }
+.planName { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.planMeta {
+  margin-top: 2px; font-size: 12.5px; color: var(--ink-2);
+}
+.planMeta .sep { color: var(--ink-3); }
+.planMeta .mono { font-family: var(--mono); font-size: 11.5px; }
+.planWarn {
+  margin-top: 5px; font-family: var(--mono); font-size: 11px;
+  color: var(--warn); font-weight: 600;
+}
+/* A meal already eaten — a record, so it stays quiet rather than warning. */
+.planPast {
+  margin-top: 5px; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-3);
+}
+.planPick { display: flex; flex-direction: column; gap: 2px; }
+.planSel {
+  font: inherit; font-size: 13.5px; padding: 7px 9px;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--r);
+  max-width: 190px;
+}
+.planSel:disabled { color: var(--ink-3); }
+.planCount {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .planSel { font-size: 16px; max-width: none; flex: 1 1 auto; }
+  .planPick { flex: 1 1 100%; }
+}
+
+/* ---------- map ---------------------------------------------------------- */
+
+.mapWrap[hidden] { display: none; }
+#map {
+  height: min(70vh, 620px);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  z-index: 1;                 /* stay under the sticky controls */
+}
+.mapFail {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; padding: 24px; text-align: center;
+  font-size: 13.5px; color: var(--ink-2);
+}
+
+.mapFoot {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+  padding: 8px 2px 0;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+}
+.mapLegend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+/* The urgency key needs ONE node to hide in the archive, but its dot and label
+   are two legend items — `contents` gives it the node without a layout box. */
+#legendUrgent { display: contents; }
+#legendUrgent[hidden] { display: none; }
+.mapLegend .dot {
+  width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+  margin-right: 2px; vertical-align: -1px;
+}
+/* legend swatches mirror the marker SHAPES, not just their hues */
+.dot.verified  { background: var(--value); }
+.dot.estimate  { background: transparent; border: 2px solid var(--warn); }
+.dot.none      { background: var(--ink-3); width: 6px; height: 6px; opacity: .6; }
+.dot.urgentDot { background: var(--crit); }
+
+/* Leaflet popup, restyled to match the page rather than its own defaults */
+.leaflet-popup-content-wrapper {
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+.leaflet-popup-tip { background: var(--surface); border: 1px solid var(--rule); }
+.leaflet-popup-content { margin: 10px 12px; font-family: var(--sans); font-size: 13px; }
+.leaflet-container { font-family: var(--sans); background: var(--surface-2); }
+.leaflet-container a { color: var(--accent); }
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
+  color: var(--ink-3) !important; font-size: 10px !important;
+}
+.mapPop h3 { margin: 0 0 3px; font-size: 14px; font-weight: 600; }
+.mapPop .meta { color: var(--ink-2); font-size: 12px; margin-bottom: 6px; }
+.mapPop .gap {
+  font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--value);
+}
+.mapPop .gap.est { color: var(--ink-2); border-bottom: 1.5px dashed var(--warn); }
+.mapPop .acts { display: flex; gap: 6px; margin-top: 8px; }
+.mapPop .acts a, .mapPop .acts button {
+  font: inherit; font-size: 12px; cursor: pointer; text-decoration: none;
+  padding: 4px 9px; border-radius: var(--r);
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+}
+.mapPop .acts a.primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+}
+
+.empty {
+  padding: 46px 14px; text-align: center; color: var(--ink-2);
+}
+.empty p { margin: 0 0 12px; }
+
+.foot {
+  border-top: 1px solid var(--rule);
+  padding: 16px 0 40px;
+  font-size: 12px; color: var(--ink-3);
+}
+.foot p { margin: 0 0 5px; max-width: 62ch; }
+
+/* ---------- phone ------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .wrap { padding-inline: max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-right)); }
+  /* iOS Safari auto-zooms the page on focus for any field under 16px */
+  .search, .sortSel, .btn, .dateFacet input[type="date"] { font-size: 16px; }
+  .results { padding-bottom: max(56px, env(safe-area-inset-bottom)); }
+  .rowHead { grid-template-columns: 1fr auto; padding: 10px 11px; gap: 2px 10px; }
+  .gapCell { min-width: 78px; }
+  .gapUsd { font-size: 19px; }
+  .searchRow { flex-wrap: wrap; }
+  .search { flex: 1 1 100%; order: -1; }
+  /* `max-width: none` alone is not enough, and neither is flex-shrink: a flex
+     item will not shrink below its own content, and a <select>'s content is
+     its LONGEST option. "Standing — strongest recognition first" made the
+     roster 345px wide inside a 320px viewport, so both pages scrolled
+     sideways on an iPhone SE — on a list you read by scrolling vertically,
+     which is the worst place for the page to slip under your thumb.
+     min-width: 0 is the part that actually lets it shrink. */
+  .sortSel {
+    flex: 1 1 auto; max-width: 100%; min-width: 0;
+    text-overflow: ellipsis;
+  }
+  .facets { grid-template-columns: 1fr; gap: 12px; }
+  .facet .scroller { max-height: 132px; }
+  .panel { max-height: 70vh; }
+  .dgrid { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+
+  /* The caveat matters, but 128px of it before the first result does not.
+     Tighten to roughly two lines and let the actions sit inline. */
+  .banner { padding: 8px 10px; gap: 6px 10px; }
+  .banner p { flex: 1 1 100%; font-size: 12.5px; line-height: 1.35; }
+  .bannerActions { gap: 12px; }
+  .bannerActions .btn { padding: 5px 9px; font-size: 13px; }
+  .masthead .wrap { padding-block: 10px 9px; }
+  .presets { padding-bottom: 8px; }
+}
+
+@media (max-width: 380px) {
+  .dgrid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+@media print {
+  .controls, .themeToggle { display: none; }
+  .row { break-inside: avoid; }
+}
+
+/* a row arrived at from a #r= link — brief, non-flashing emphasis */
+.row.linked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .row.linked { transition: box-shadow .35s ease, border-color .35s ease; }
+}
+
+/* ---------- compare ------------------------------------------------------ */
+
+.compare[hidden] { display: none; }
+
+/* the table is the one thing here allowed to scroll sideways — the page is not */
+.cmpScroll {
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--rule); border-radius: var(--r);
+  background: var(--surface);
+}
+.cmpTable { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.cmpTable th, .cmpTable td {
+  padding: 9px 12px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--rule-2);
+  min-width: 168px;
+}
+.cmpTable tr:last-child td, .cmpTable tr:last-child th { border-bottom: 0; }
+
+/* the attribute column stays put while restaurants scroll past it */
+.cmpKey, .cmpCorner {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface-2);
+  border-right: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3);
+  white-space: nowrap; min-width: 116px; width: 116px;
+}
+.cmpTable thead th, .cmpTable tr:first-child th { background: var(--surface-2); }
+.cmpTable tr:first-child th:not(.cmpCorner) {
+  border-bottom: 1px solid var(--rule);
+  white-space: normal;
+}
+.cmpName { font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.cmpName:hover { color: var(--accent); text-decoration: underline; }
+.cmpRemove {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  margin-left: 6px; padding: 2px 5px;
+  background: none; border: 0; color: var(--ink-3); border-radius: 3px;
+}
+.cmpRemove:hover { color: var(--crit); background: var(--crit-sub); }
+.cmpTable td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+
+/* the better value in rows that have one — a dot, so it survives greyscale */
+.cmpBest { color: var(--value); font-weight: 600; }
+.cmpBest::before {
+  content: "● "; color: var(--value); font-size: 9px; vertical-align: 1px;
+}
+
+@media (max-width: 640px) {
+  .cmpTable th, .cmpTable td { min-width: 142px; padding: 8px 10px; }
+  .cmpKey, .cmpCorner { min-width: 96px; width: 96px; }
+}
+
+/* Off-menu note inside a row detail. Same muted register as .facetNote — it is
+   a qualification on the claim above it, not a second claim. */
+.dsec > .dnote {
+  margin: -2px 0 7px;
+  font-size: 11.5px; line-height: 1.35; max-width: 54ch;
+  color: var(--ink-3);
+}
+.snipSrc {
+  font-size: 11px; margin-left: 6px;
+  color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* The hand-checked item and its price: the fact that replaced the keyword. */
+.snip > .offItem {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--ink); margin-left: 2px;
+}
+
+/* An award that has aged. Still shown — a 1999 James Beard nod is a real fact
+   — but it must not carry the same visual weight as a current one. */
+.pill.rec.aged {
+  background: var(--surface-2); color: var(--ink-3);
+  border-color: var(--rule);
+}
+
+/* Rubric breakdown. The bars exist so the grade can be taken apart at a
+   glance -- a composite you cannot inspect is a vibe, not evidence. */
+.rubricBars { display: grid; gap: 3px; margin-top: 2px; }
+.rbRow { display: grid; grid-template-columns: minmax(9em, 14em) 1fr 4.5em; gap: 8px; align-items: center; }
+.rbK { font-size: 11.5px; color: var(--ink-2); }
+.rbTrack { height: 7px; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.rbFill { display: block; height: 100%; background: var(--accent); }
+.rbV { font-family: var(--mono); font-size: 11px; color: var(--ink-2); text-align: right; }
+.rbRow.unknown .rbTrack { border-style: dashed; background: transparent; }
+.rbRow.unknown .rbFill { width: 0; }
+.rbRow.unknown .rbV { color: var(--ink-3); font-style: italic; }
+
+/* Compare: the booking cell. The platform name sits under the button so you
+   know what you are about to open, and a restaurant with no booking link says
+   so rather than pretending its homepage is one. */
+.cmpBook { white-space: nowrap; }
+.cmpVia {
+  display: block; margin-top: 3px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .04em;
+  color: var(--ink-3); text-transform: uppercase;
+}
