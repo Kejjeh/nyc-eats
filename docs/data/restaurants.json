@@ -6,7 +6,7 @@
    "Manhattan": 783,
    "Queens": 52
   },
-  "generated_at": "2026-11-09T19:36:07Z",
+  "generated_at": "2026-11-09T19:39:23Z",
   "left_out": {
    "outside the four boroughs (ZIP not in the City spine)": 2
   },
@@ -22,6 +22,9 @@
   "rating_mean": 4.522,
   "restaurants": 1016,
   "spine_restaurants": 24479,
+  "theme_matches_without_evidence": {
+   "tasting-menu": 15
+  },
   "with_google_details": 97
  },
  "restaurants": [
@@ -3197,9 +3200,7 @@
     "Michelin recommended 2025"
    ],
    "borough": "Brooklyn",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": null,
    "delivery": false,
@@ -6635,9 +6636,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Seafood",
    "delivery": true,
@@ -6896,9 +6895,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Latin American",
    "delivery": true,
@@ -8171,9 +8168,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Italian",
    "delivery": null,
@@ -10310,9 +10305,7 @@
     "Bib Gourmand 2025"
    ],
    "borough": "Manhattan",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Vegan",
    "delivery": true,
@@ -13742,9 +13735,7 @@
     "Michelin recommended 2025"
    ],
    "borough": "Manhattan",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": null,
    "delivery": false,
@@ -14671,9 +14662,7 @@
     "Bib Gourmand 2025"
    ],
    "borough": "Manhattan",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": null,
    "delivery": true,
@@ -17198,9 +17187,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Eastern European",
    "delivery": true,
@@ -17735,9 +17722,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Middle Eastern",
    "delivery": true,
@@ -17978,9 +17963,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Manhattan",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Latin American",
    "delivery": true,
@@ -18463,9 +18446,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "American",
    "delivery": null,
@@ -20117,9 +20098,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Spanish",
    "delivery": true,
@@ -21863,9 +21842,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": null,
    "delivery": true,
@@ -24734,9 +24711,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Seafood",
    "delivery": true,
@@ -26613,9 +26588,7 @@
    "also_listed_as": null,
    "awards": [],
    "borough": "Bronx",
-   "categories": [
-    "Tasting menu"
-   ],
+   "categories": [],
    "checked": "2026-11-09",
    "cuisine": "Italian",
    "delivery": true,
