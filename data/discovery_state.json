@@ -1,0 +1,5 @@
+{
+"themed:tasting-menu:bronx": {"calls": 1, "new": 14, "ran_at": "2026-11-09T19:35:45Z", "results": 14},
+"themed:tasting-menu:brooklyn": {"calls": 3, "new": 25, "ran_at": "2026-11-09T19:35:51Z", "results": 60},
+"themed:tasting-menu:manhattan": {"calls": 3, "new": 60, "ran_at": "2026-11-09T19:35:46Z", "results": 60}
+}
