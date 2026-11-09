@@ -112,3 +112,8 @@ def test_decode_follows_the_charset_and_falls_back_to_windows_1252():
     assert menus.decode("Café".encode("utf-8")) == "Café"
     assert menus.decode('<meta charset="iso-8859-1">Caf\xe9'.encode("latin-1")).endswith("Café")
     assert menus.decode("Café".encode("latin-1"), "text/html; charset=ISO-8859-1") == "Café"
+
+
+def test_due_reads_only_places_in_the_guide_when_given_a_scope():
+    places = {"in": {"website": "https://in.nyc"}, "out": {"website": "https://out.nyc"}}
+    assert menus.due(places, {}, "2026-11-09", scope={"in"}) == [("in", "https://in.nyc")]
