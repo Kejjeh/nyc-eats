@@ -25,5 +25,10 @@ One term, one meaning. Code, docs and the page use these exactly.
   3 menu-looking pages) into `data/menus.json`. Free; obeys robots.txt.
 - **Checked on the menu** — the crawl read the site (`status: ok`). A site that could not be read
   (robots, error, JavaScript-only "no text") is *not checked*, never "checked and found nothing".
+- **Ask** — the page's plain-English box (`core.parseAsk`): turns "Italian, $$, open past 10, near Union
+  Square" into the page's own filters, on the page, free. Words it cannot place are shown as "Not understood".
+- **My list** — Saved / Been there marks, kept in the viewer's browser only (`localStorage`).
+- **Freshness** — "New to the guide" (not in last month's snapshot) and "Rising" (rating up 0.1+ on 10+ new
+  reviews), from `data/history/YYYY-MM.json`, which `build` writes each run. The first month flags nothing.
 - **Score** — the rating shrunk toward the guide's mean by `PRIOR` (150) reviews; the default sort.
 - **In scope** — passes `build.leave_out_reason`: four boroughs, operational, rated 4.2+, sit-down.

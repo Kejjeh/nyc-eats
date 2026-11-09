@@ -71,3 +71,50 @@ def test_href_guard_refuses_script_and_relative_urls():
 
 def test_award_kind_drops_the_year():
     assert run("E.awardKind('Michelin ★★ 2025')") == "Michelin ★★"
+
+
+VOCAB = {"boroughs": ["Bronx", "Brooklyn", "Manhattan", "Queens"],
+         "neighborhoods": ["Belmont", "Upper East Side-Carnegie Hill", "Hudson Yards-Chelsea-Flatiron-Union Square",
+                           "East Village", "Park Slope-Gowanus"],
+         "cuisines": ["Italian", "Thai", "Steakhouse", "Korean", "Japanese", "Pizza"],
+         "awards": ["Michelin ★", "Michelin ★★", "Bib Gourmand", "Michelin recommended", "James Beard winner",
+                    "NYT 100 Best"]}
+
+
+def ask(text):
+    return run(f"E.parseAsk({json.dumps(text)}, {json.dumps(VOCAB)})")
+
+
+def test_ask_the_example_from_the_brief():
+    a = ask("Italian, $$, open past 10, near Union Square")
+    assert a["filters"] == {"price": ["$$"], "cuisine": ["Italian"]}
+    assert a["openAt"] == 22 * 60 and a["near"] == "union square" and a["ignored"] == []
+
+
+def test_ask_places_categories_awards_and_rating():
+    a = ask("cheap thai in the Bronx with delivery rated 4.6+")
+    assert a["filters"] == {"offers": ["Delivery"], "price": ["$", "$$"], "borough": ["Bronx"], "cuisine": ["Thai"]}
+    assert a["minRating"] == 4.6
+    a = ask("michelin starred tasting menu in Park Slope")
+    assert a["filters"] == {"category": ["Tasting menu"], "award": ["Michelin ★", "Michelin ★★", "Michelin ★★★"],
+                            "neighborhood": ["Park Slope-Gowanus"]}
+    assert ask("any michelin steakhouses")["filters"] == {
+        "award": ["Michelin ★", "Michelin ★★", "Michelin recommended"], "cuisine": ["Steakhouse"]}
+
+
+def test_ask_neighborhood_parts_and_longest_name_first():
+    assert ask("korean in the east village")["filters"] == {"neighborhood": ["East Village"], "cuisine": ["Korean"]}
+    assert ask("upper east side omakase")["filters"] == {
+        "category": ["Omakase & chef's counter"], "neighborhood": ["Upper East Side-Carnegie Hill"]}
+
+
+@pytest.mark.parametrize("text,minute", [("open late", 23 * 60), ("open until 2", 120), ("open at 11:30pm", 23 * 60 + 30),
+                                         ("open past 9 pm", 21 * 60), ("lunch at 12pm", 12 * 60)])
+def test_ask_open_times(text, minute):
+    assert ask(text)["openAt"] == minute
+
+
+def test_ask_reports_what_it_could_not_place_instead_of_searching_for_it():
+    a = ask("romantic italian with a view")
+    assert a["filters"] == {"cuisine": ["Italian"]} and a["ignored"] == ["romantic", "view"]
+    assert ask("open now")["openNow"] is True

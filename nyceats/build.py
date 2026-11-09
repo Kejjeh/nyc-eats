@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from . import paths, spine
 from .jsonio import read_json, write_json
+from .ledger import billing_month
 from .names import zip_from_address
 from .plan import EXCLUDED_PRIMARY, MIN_RATING, THEME_CATEGORY
 
@@ -146,6 +147,33 @@ def award_badges(awards: list[dict]) -> list[str]:
     return [f"{lab} {yr}" if yr else lab for lab, yr in sorted(latest.items(), key=lambda kv: order.index(kv[0]))]
 
 
+# What's new (freshness flags). Each build saves this month's ratings to data/history/YYYY-MM.json;
+# a row is compared with the latest earlier month. With no earlier month nothing is flagged, so the
+# first month never calls the whole guide "new".
+RISING_STARS = 0.1    # rating up by at least this much ...
+RISING_REVIEWS = 10   # ... on at least this many new reviews
+
+
+def freshness(rows: list[dict], previous: dict | None) -> dict[str, str]:
+    """id -> "New to the guide" | "Rising", against the previous month's {id: [rating, reviews]}."""
+    if not previous:
+        return {}
+    out = {}
+    for r in rows:
+        before = previous.get(r["id"])
+        if before is None:
+            out[r["id"]] = "New to the guide"
+        elif (r["rating"] is not None and before[0] is not None and r["rating"] - before[0] >= RISING_STARS - 1e-9
+              and (r["reviews"] or 0) - (before[1] or 0) >= RISING_REVIEWS):
+            out[r["id"]] = "Rising"
+    return out
+
+
+def previous_month(history_dir, month: str) -> tuple[str | None, dict | None]:
+    files = sorted(p for p in history_dir.glob("*.json") if p.stem < month) if history_dir.exists() else []
+    return (files[-1].stem, read_json(files[-1])) if files else (None, None)
+
+
 def leave_out_reason(g: dict | None, rating, borough) -> str | None:
     if borough is None:
         return "outside the four boroughs (ZIP not in the City spine)"
@@ -231,6 +259,12 @@ def build(write: bool = True) -> dict:
         r["score"] = round((r["rating"] * n + mean * PRIOR) / (n + PRIOR), 4)
     rows.sort(key=lambda r: (-r["score"], r["name"]))
 
+    month = billing_month()
+    prev_month, prev = previous_month(paths.HISTORY, month)
+    fresh = freshness(rows, prev)
+    for r in rows:
+        r["fresh"] = fresh.get(r["id"])
+
     meta = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "restaurants": len(rows), "by_borough": dict(Counter(r["borough"] for r in rows)),
@@ -246,6 +280,7 @@ def build(write: bool = True) -> dict:
                   "price_only": dict(Counter(
                       "site read, does not say" if r["menu"] else "site not read"
                       for r in rows for w in r["category_why"].values() if w.startswith("price")))},
+        "freshness": {"month": month, "compared_with": prev_month, **Counter(fresh.values())},
         "spine_restaurants": len(sp),
     }
     if write:
@@ -254,4 +289,6 @@ def build(write: bool = True) -> dict:
             raise RuntimeError(f"payload would shrink from {old['meta']['restaurants']} to {len(rows)} rows; "
                                "refusing. Check the inputs before publishing a thinner guide.")
         write_json(paths.SITE_DATA, {"meta": meta, "restaurants": rows}, compact_rows=False)
+        write_json(paths.HISTORY / f"{month}.json", {r["id"]: [r["rating"], r["reviews"]] for r in rows},
+                   compact_rows=True)
     return meta
