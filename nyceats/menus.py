@@ -42,11 +42,17 @@ STALE_DAYS = 30
 # Narrower than build.THEME_WORDS: a site is long, so a loose word ("counter", "game")
 # would match somewhere on almost every page.
 MENU_WORDS = {
-    "tasting-menu": r"tasting menu|chef'?s tasting|degustation|\d{1,2}[- ]course|multi-?course",
+    # Five courses or more: a "3-course" family meal or lunch is a prix fixe, not a tasting menu.
+    "tasting-menu": r"tasting menu|chef'?s tasting|degustation|\b(?:[5-9]|[1-3]\d)[- ]courses?\b|multi-?course",
     "prix-fixe": r"prix[- ]fixe|fixed[- ]price menu|set menu",
     "omakase": r"omakase|kaiseki|kappo",
     "chefs-counter": r"chef'?s counter|chef'?s table|counter seats?|omakase counter",
 }
+# A sentence about a one-night holiday or event menu says nothing about what the restaurant serves
+# the rest of the year ("2026 THANKSGIVING DINNER PRIX FIXE"), so it is not evidence.
+ONE_OFF = re.compile(r"thanksgiving|christmas|xmas|new year|nye\b|valentine|easter|mother'?s day|"
+                     r"father'?s day|hanukkah|passover|holiday|restaurant week|halloween|super bowl", re.I)
+SNIPPET = 220
 MENU_LINK = re.compile(r"menu|tasting|omakase|prix|dinner|food|kaiseki|course", re.I)
 PRICE = re.compile(r"\$\s?(\d{2,4})(?:\.\d\d)?")
 
@@ -131,8 +137,12 @@ def find_evidence(text: str) -> tuple[dict[str, str], list[str]]:
     for theme, pattern in MENU_WORDS.items():
         rx = re.compile(pattern, re.I)
         for s in sentences:
-            if rx.search(s):
-                snippet = s.strip()[:220]
+            m = rx.search(s)
+            if m and not ONE_OFF.search(s):
+                # A window around the match, so a long sentence keeps the words that made it evidence.
+                s = s.strip()
+                start = max(0, min(m.start() - 80, len(s) - SNIPPET))
+                snippet = ("…" if start else "") + s[start:start + SNIPPET]
                 evidence[theme] = snippet
                 for m in PRICE.finditer(s):
                     amount = int(m.group(1))
@@ -140,6 +150,23 @@ def find_evidence(text: str) -> tuple[dict[str, str], list[str]]:
                         prices.append(f"${amount}")
                 break
     return evidence, prices
+
+
+def current_evidence(menu: dict | None) -> dict[str, str]:
+    """The stored evidence that still passes today's MENU_WORDS and ONE_OFF.
+
+    A site is re-read only every STALE_DAYS, so when the rules tighten, `build` re-checks each
+    stored sentence instead of trusting what an older rule accepted. (It cannot find a sentence an
+    older rule missed; the next re-read does.)
+    """
+    if not menu or menu.get("status") != "ok":
+        return {}
+    # A sentence stored whole-but-cut by the first crawl (exactly SNIPPET long, from its start) may
+    # have lost the matching words past the cut; only the one-off check can be repeated on it.
+    def cut(s):
+        return len(s) >= SNIPPET and not s.startswith("…")
+    return {t: s for t, s in (menu.get("evidence") or {}).items()
+            if t in MENU_WORDS and not ONE_OFF.search(s) and (cut(s) or re.search(MENU_WORDS[t], s, re.I))}
 
 
 class _Fetcher:

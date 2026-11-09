@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from . import paths, spine
 from .jsonio import read_json, write_json
 from .ledger import billing_month
+from .menus import current_evidence
 from .names import zip_from_address
 from .plan import EXCLUDED_PRIMARY, MIN_RATING, THEME_CATEGORY
 
@@ -68,9 +69,7 @@ PRICE_EVIDENCE = {"tasting-menu": 3, "kaiseki": 3, "prix-fixe": 3, "omakase": 3,
 
 def menu_evidence(category: str, menu: dict | None) -> str | None:
     """The sentence on the restaurant's own site that names this kind of meal, if the crawl read one."""
-    if not menu or menu.get("status") != "ok":
-        return None
-    for mt, snippet in (menu.get("evidence") or {}).items():
+    for mt, snippet in current_evidence(menu).items():
         if MENU_CATEGORY.get(mt) == category:
             return snippet
     return None
@@ -259,7 +258,7 @@ def build(write: bool = True) -> dict:
             "price": (g or {}).get("price_level"),
             "categories": list(why), "category_why": why,
             "menu": {"checked": menu["checked"], "prices": menu.get("prices") or [],
-                     "says": {MENU_CATEGORY[k]: v for k, v in (menu.get("evidence") or {}).items()}}
+                     "says": {MENU_CATEGORY[k]: v for k, v in current_evidence(menu).items()}}
             if menu_ok else None,
             "awards": award_badges((s or {}).get("awards", [])),
             "restaurant_week": bool((s or {}).get("restaurant_week")),
