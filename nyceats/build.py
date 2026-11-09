@@ -6,6 +6,7 @@ much shows up in the build output instead of as a quietly thinner site.
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import datetime, timezone
 
@@ -35,6 +36,57 @@ TYPE_LABELS = {"steak_house": "Steakhouse", "barbecue_restaurant": "Barbecue", "
                "vegan_restaurant": "Vegan", "vegetarian_restaurant": "Vegetarian",
                "middle_eastern_restaurant": "Middle Eastern", "korean_barbecue_restaurant": "Korean barbecue",
                "hot_pot_restaurant": "Hot pot", "dim_sum_restaurant": "Dim sum", "tapas_restaurant": "Tapas"}
+
+
+# A themed search tags a restaurant only with evidence it fits (owner ruling, 2026-11-09). Google
+# ranks by relevance and always fills the page: where a borough has few tasting menus it returns good
+# restaurants nearby instead (the first live run's Bronx results), and tagging those would claim a meal
+# they do not serve. Evidence is what Google returned: the place's type, a word in its name or
+# editorial summary, or (for the expensive themes only) a $$$/$$$$ price. A menu crawl can add more later.
+_TASTING = r"tasting|omakase|kaiseki|kappo|prix|fixe|multi-?course|chef'?s counter|set menu"
+THEME_WORDS = {
+    "tasting-menu": _TASTING, "kaiseki": _TASTING, "prix-fixe": _TASTING,
+    "omakase": r"omakase|chef'?s counter|kappo|kaiseki", "chefs-counter": r"omakase|chef'?s counter|kappo|counter",
+    "fine-dining": r"tasting|fine dining|michelin",
+    "wagyu": r"wagyu|kobe|a5", "wild-game": r"venison|game|boar|elk|bison|quail|pheasant",
+    "goat": r"goat|chivo|cabrito|mutton", "rabbit": r"rabbit|conejo|lapin|coniglio",
+    "eel": r"\beel|unagi|anago", "octopus": r"octopus|pulpo|polpo|tako",
+    "uni": r"\buni\b|sea urchin|erizo", "peking-duck": r"peking|roast duck|duck",
+}
+PRICE_EVIDENCE = {"tasting-menu": 3, "kaiseki": 3, "prix-fixe": 3, "omakase": 3, "chefs-counter": 3,
+                  "fine-dining": 4}  # protein themes: price says nothing about the protein
+
+
+def theme_evidence(theme: str, g: dict) -> str | None:
+    """Why this place plausibly fits the theme it was found by, or None when nothing says so."""
+    if theme not in THEME_WORDS:
+        raise KeyError(f"theme {theme!r} has no evidence rule; add one to THEME_WORDS")
+    if PRICE_EVIDENCE.get(theme) and g.get("primary_type") == "fine_dining_restaurant":
+        return "Google type fine_dining_restaurant"
+    text = f"{g.get('name') or ''} {g.get('summary') or ''}"
+    m = re.search(THEME_WORDS[theme], text, re.I)
+    if m:
+        return f"name or summary mentions {m.group(0).lower()!r}"
+    floor = PRICE_EVIDENCE.get(theme)
+    if floor and (g.get("price_level") or 0) >= floor:
+        return f"price {'$' * g['price_level']}"
+    return None
+
+
+def categories_for(g: dict | None, dropped: list) -> list[str]:
+    """Categories with evidence. Each theme match without evidence is appended to `dropped`."""
+    if not g:
+        return []
+    cats = {"Fine dining"} if g.get("primary_type") == "fine_dining_restaurant" else set()
+    for tag in g.get("found_by", []):
+        if not tag.startswith("themed:"):
+            continue
+        theme = tag.split(":", 1)[1]
+        if theme_evidence(theme, g):
+            cats.add(THEME_CATEGORY[theme])
+        else:
+            dropped.append(theme)
+    return sorted(cats)
 
 
 def cuisine_of(primary_type: str | None, spine_cuisine: str | None) -> str | None:
@@ -86,7 +138,7 @@ def build(write: bool = True) -> dict:
     zb = spine.zip_boroughs(sp)
     index = spine.SpineIndex(sp)
 
-    rows, left_out, matched = [], Counter(), Counter()
+    rows, left_out, matched, untagged = [], Counter(), Counter(), []
     for pid in sorted(set(seed) | set(places)):
         g, s = places.get(pid), seed.get(pid)
         name = (g or {}).get("name") or (s or {}).get("name")
@@ -106,9 +158,7 @@ def build(write: bool = True) -> dict:
         nta = rec["nta"] if rec else index.nta_at(zip_code, address)
         matched["matched by " + how if rec else
                 "neighborhood from same-building records" if nta else "no neighborhood"] += 1
-        categories = sorted({THEME_CATEGORY[t.split(":", 1)[1]] for t in (g or {}).get("found_by", [])
-                             if t.startswith("themed:")}
-                            | ({"Fine dining"} if (g or {}).get("primary_type") == "fine_dining_restaurant" else set()))
+        categories = categories_for(g, untagged)
         rows.append({
             "id": pid, "name": name, "address": address, "borough": borough, "zip": zip_code,
             "neighborhood": nta_names.get(nta) if nta else None, "nta": nta,
@@ -146,6 +196,7 @@ def build(write: bool = True) -> dict:
         "with_google_details": sum(1 for r in rows if r["source"] == "google"),
         "prior": PRIOR, "rating_mean": mean, "min_rating": MIN_RATING,
         "left_out": dict(left_out), "neighborhood_match": dict(matched),
+        "theme_matches_without_evidence": dict(Counter(untagged)),
         "spine_restaurants": len(sp),
     }
     if write:
