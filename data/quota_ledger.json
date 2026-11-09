@@ -1,0 +1,15 @@
+{
+ "months": {
+  "2026-11": {
+   "nearby_search_enterprise": 3,
+   "nearby_search_enterprise_atmosphere": 1,
+   "place_details_enterprise": 3,
+   "place_details_enterprise_atmosphere": 3,
+   "place_details_pro": 3,
+   "text_search_enterprise": 4,
+   "text_search_enterprise_atmosphere": 2,
+   "text_search_essentials_ids": 10
+  }
+ },
+ "notes": "Opened 2026-11-09 with the 29 recon-probe calls made that day (README). The guide's code adds to this file before every Google call; never lower a count by hand."
+}
