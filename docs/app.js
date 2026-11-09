@@ -241,6 +241,16 @@ function renderRow(r) {
     extra.append(ul);
   }
   if (r.awards.length) extra.append(el('p', null, `Awards: ${r.awards.join(' · ')}`));
+  /* Why each category applies (ADR 0003), quoting the restaurant's own site where it was read. */
+  for (const [cat, why] of Object.entries(r.category_why || {})) {
+    const said = r.menu && r.menu.says && r.menu.says[cat];
+    extra.append(el('p', 'why', said ? `${cat}: the restaurant's site says “${said}”`
+                                     : `${cat}: ${why}${why.startsWith('price') ? ' (not checked on a menu)' : ''}`));
+  }
+  if (r.menu && r.menu.prices && r.menu.prices.length) {
+    extra.append(el('p', null, `Menu prices on the restaurant's site: ${r.menu.prices.join(', ')}`));
+  }
+  if (r.menu) extra.append(el('p', 'checked', `Restaurant's own site read ${r.menu.checked}.`));
   if (r.also_listed_as) extra.append(el('p', null, `Also listed as: ${r.also_listed_as.join(', ')}`));
   if (r.address) extra.append(el('p', null, r.address));
   extra.append(el('p', 'checked', r.source === 'google'

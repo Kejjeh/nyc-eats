@@ -19,6 +19,11 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Theme** — a priority search ("tasting menu", "wagyu") whose results get a **category** on the page.
 - **Category** — the kind of meal a theme stands for: Tasting menu, Prix fixe, Omakase & chef's counter,
   Fine dining, Unusual proteins. Means Google returned it for that search AND its listing gives evidence
-  (ADR 0003: type, a theme word, or price for the expensive themes); not yet "checked on a menu".
+  (ADR 0003: type, a theme word, or price for the expensive themes), OR the restaurant's own site names
+  the meal (ADR 0004). `category_why` on each row says which.
+- **Menu crawl** — `python -m nyceats menus`: reads each restaurant's own website (home page plus up to
+  3 menu-looking pages) into `data/menus.json`. Free; obeys robots.txt.
+- **Checked on the menu** — the crawl read the site (`status: ok`). A site that could not be read
+  (robots, error, JavaScript-only "no text") is *not checked*, never "checked and found nothing".
 - **Score** — the rating shrunk toward the guide's mean by `PRIOR` (150) reviews; the default sort.
 - **In scope** — passes `build.leave_out_reason`: four boroughs, operational, rated 4.2+, sit-down.
