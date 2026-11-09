@@ -9,7 +9,7 @@
 'use strict';
 
 const { fold, isHttpURL, isOpenAt, nycNow, weightedRating, distanceMi, priceLabel, deliveryLinks,
-        awardKind } = window.EATS;
+        awardKind, parseAsk } = window.EATS;
 
 const DATA_URL = 'data/restaurants.json';
 const BOROUGHS_URL = 'data/boroughs.json';
@@ -44,6 +44,7 @@ const STATE = {
   sort: DEFAULT_SORT,
   minRating: DEFAULT_MIN,
   openNow: false,
+  openAt: null,    // minute of the day (NYC), from Ask: "open past 10"
   near: null,      // { lat, lng, label }
   radius: 1,       // miles; 0 = any
   filters: new Map(),
@@ -62,12 +63,35 @@ function openState(r) {
   const now = nycNow();
   return isOpenAt(r.hours, now.day, now.minute);
 }
+/* Open at a clock time tonight. Before 5 AM means after midnight, so tomorrow's day. */
+function openAtState(r, minute) {
+  const now = nycNow();
+  return isOpenAt(r.hours, minute < 300 ? (now.day + 1) % 7 : now.day, minute);
+}
+const clockLabel = (m) => {
+  const h = Math.floor(m / 60) % 24, mm = String(m % 60).padStart(2, '0');
+  return `${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+/* My list: saved and been-there marks, kept in this browser only (no account, nothing sent). */
+const MARKS_KEY = 'eats-marks';
+const MARK_LABEL = { saved: 'Saved', been: 'Been there' };
+let MARKS = {};
+try { MARKS = JSON.parse(localStorage.getItem(MARKS_KEY) || '{}') || {}; } catch { MARKS = {}; }
+function toggleMark(id, kind) {
+  const set = new Set(MARKS[id] || []);
+  if (set.has(kind)) set.delete(kind); else set.add(kind);
+  if (set.size) MARKS[id] = [...set]; else delete MARKS[id];
+  try { localStorage.setItem(MARKS_KEY, JSON.stringify(MARKS)); } catch { /* private mode: kept for this visit */ }
+}
 const neighborhoodOf = (r) => r.neighborhood
   || (r.neighborhood_rw ? `${r.neighborhood_rw} (unverified)` : null);
 
 /* ---------- facets ------------------------------------------------------ */
 
 const FACETS = [
+  { key: 'mine', label: 'My list', get: (r) => (MARKS[r.id] || []).map((k) => MARK_LABEL[k]).filter(Boolean) },
+  { key: 'fresh', label: "What's new", get: (r) => (r.fresh ? [r.fresh] : []) },
   { key: 'category', label: 'Kind of meal',
     get: (r) => [...r.categories, ...(r.restaurant_week ? ['Restaurant Week'] : [])] },
   { key: 'borough', label: 'Borough', get: (r) => (r.borough ? [r.borough] : []) },
@@ -105,6 +129,7 @@ function writeHash() {
   if (STATE.sort !== DEFAULT_SORT) p.set('sort', STATE.sort);
   if (STATE.minRating !== DEFAULT_MIN) p.set('min', String(STATE.minRating));
   if (STATE.openNow) p.set('open', '1');
+  if (STATE.openAt != null) p.set('openat', String(STATE.openAt));
   if (STATE.near) {
     p.set('near', `${STATE.near.lat.toFixed(5)},${STATE.near.lng.toFixed(5)}`);
     p.set('at', STATE.near.label);
@@ -142,6 +167,8 @@ function readHash() {
     STATE.minRating = Number(min); $('#minRating').value = min;
   }
   if (p.get('open') === '1') STATE.openNow = true;
+  const oa = Number(p.get('openat'));
+  if (p.get('openat') && Number.isInteger(oa) && oa >= 0 && oa < 1440) STATE.openAt = oa;
   const near = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(p.get('near') || '');
   if (near) {
     setNear(Number(near[1]), Number(near[2]), p.get('at') || 'the chosen point');
@@ -168,6 +195,7 @@ function matches(r, exceptKey) {
   if (r.rating == null || r.rating < STATE.minRating) return false;
   if (STATE.q && !haystack(r).includes(STATE.q)) return false;
   if (STATE.openNow && openState(r) !== true) return false;
+  if (STATE.openAt != null && openAtState(r, STATE.openAt) !== true) return false;
   if (STATE.near && STATE.radius > 0) {
     const d = dist(r);
     if (d == null || d > STATE.radius) return false;
@@ -204,6 +232,7 @@ function renderRow(r) {
   if (price) head.append(el('span', 'pill price', price));
   const open = openState(r);
   if (open != null) head.append(el('span', `pill ${open ? 'open' : 'shut'}`, open ? 'Open now' : 'Closed now'));
+  if (r.fresh) head.append(el('span', 'pill fresh', r.fresh));
   row.append(head);
 
   const meta = el('p', 'venueMeta');
@@ -231,6 +260,18 @@ function renderRow(r) {
     for (const dl of deliveryLinks(r.name)) links.append(link('deliv', dl.label, dl.url));
   }
   if (links.childNodes.length) row.append(links);
+
+  const marks = el('p', 'marks');
+  for (const kind of ['saved', 'been']) {
+    const on = (MARKS[r.id] || []).includes(kind);
+    const b = el('button', `markBtn${on ? ' on' : ''}`, on ? (kind === 'saved' ? '★ Saved' : '✓ Been there')
+                                                         : (kind === 'saved' ? '☆ Save' : 'Been there?'));
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(on));
+    b.addEventListener('click', () => { toggleMark(r.id, kind); apply(); });
+    marks.append(b);
+  }
+  row.append(marks);
 
   const extra = el('details', 'more');
   extra.append(el('summary', null, 'More'));
@@ -318,6 +359,7 @@ function renderActive() {
   for (const [key, set] of STATE.filters) {
     for (const v of set) chips.push([v, () => { set.delete(v); if (!set.size) STATE.filters.delete(key); }]);
   }
+  if (STATE.openAt != null) chips.push([`Open at ${clockLabel(STATE.openAt)}`, () => { STATE.openAt = null; }]);
   box.hidden = chips.length === 0;
   for (const [label, undo] of chips) {
     const chip = el('button', 'chip', `${label} ✕`);
@@ -338,15 +380,17 @@ function emptyMessage() {
   const parts = [];
   if (STATE.near && STATE.radius > 0) parts.push(`within ${STATE.radius} mi of ${STATE.near.label}`);
   if (STATE.openNow) parts.push('open right now');
+  if (STATE.openAt != null) parts.push(`open at ${clockLabel(STATE.openAt)}`);
   if (STATE.q) parts.push(`matching “${$('#q').value.trim()}”`);
   if (STATE.filters.size) parts.push('with those filters');
   /* Open now can only count places whose hours are known. Say how many it could
      not judge, or an empty list reads as "everything near you is closed". */
   let unknownHours = 0;
-  if (STATE.openNow) {
-    STATE.openNow = false;
+  if (STATE.openNow || STATE.openAt != null) {
+    const keep = [STATE.openNow, STATE.openAt];
+    STATE.openNow = false; STATE.openAt = null;
     unknownHours = STATE.rows.filter((r) => matches(r) && openState(r) == null).length;
-    STATE.openNow = true;
+    [STATE.openNow, STATE.openAt] = keep;
   }
   msg.textContent = `No restaurant rated ${STATE.minRating}+ is ${parts.join(', ') || 'listed'}. `
     + (unknownHours ? `${unknownHours} otherwise matching have no opening hours on file yet, so Open now `
@@ -377,6 +421,40 @@ function apply() {
   renderFacets();
   if (focused) { const again = document.getElementById(focused); if (again) again.focus(); }
   writeHash();
+}
+
+/* ---------- Ask ----------------------------------------------------------- */
+
+function askVocab() {
+  const uniq = (f) => [...new Set(STATE.rows.flatMap((r) => f(r)))].filter(Boolean);
+  return { boroughs: uniq((r) => [r.borough]), neighborhoods: uniq((r) => [r.neighborhood]),
+           cuisines: uniq((r) => [r.cuisine]), awards: uniq((r) => r.awards.map(awardKind)) };
+}
+
+/* Replace the current view with what the question asks for, and say what was understood. */
+function ask(text) {
+  if (!text) return;
+  const a = parseAsk(text, askVocab());
+  STATE.filters.clear();
+  STATE.q = ''; $('#q').value = '';
+  STATE.openNow = a.openNow;
+  STATE.openAt = a.openAt;
+  if (a.minRating != null) { STATE.minRating = a.minRating; $('#minRating').value = String(a.minRating); }
+  for (const [key, values] of Object.entries(a.filters)) {
+    const f = FACET_BY_KEY.get(key);
+    const known = knownFacetValues(f);
+    const set = new Set(values.filter((v) => known.has(v)));
+    if (set.size) STATE.filters.set(key, set);
+  }
+  const said = [...a.understood];
+  if (a.openNow) said.push('open now');
+  if (a.openAt != null) said.push(`open at ${clockLabel(a.openAt)}`);
+  if (a.minRating != null) said.push(`rated ${a.minRating}+`);
+  if (a.near) said.push(`near “${a.near}”`);
+  $('#askStatus').textContent = (said.length ? `Showing: ${said.join(' · ')}.` : 'No filters recognised.')
+    + (a.ignored.length ? ` Not understood: ${a.ignored.join(', ')}.` : '');
+  STATE.shown = PAGE;
+  if (a.near) { $('#near').value = a.near; geocode(a.near); } else { clearNear(); apply(); }
 }
 
 /* ---------- near an address --------------------------------------------- */
@@ -547,6 +625,7 @@ function wire() {
       { timeout: FETCH_TIMEOUT_MS, maximumAge: 300000 });
   });
   $('#nearClear').addEventListener('click', () => { clearNear(); apply(); });
+  $('#askForm').addEventListener('submit', (e) => { e.preventDefault(); ask($('#ask').value.trim()); });
   $('#filterBtn').addEventListener('click', () => {
     const panel = $('#panel');
     panel.hidden = !panel.hidden;
@@ -570,6 +649,8 @@ function wire() {
       STATE.q = '';
       $('#q').value = '';
       STATE.openNow = false;
+      STATE.openAt = null;
+      $opt('#askStatus').textContent = '';
       STATE.shown = PAGE;
       apply();
     });
@@ -580,6 +661,7 @@ function wire() {
     STATE.sort = DEFAULT_SORT; $('#sort').value = DEFAULT_SORT;
     STATE.minRating = DEFAULT_MIN; $('#minRating').value = String(DEFAULT_MIN);
     STATE.openNow = false;
+    STATE.openAt = null;
     clearNear();
     STATE.radius = 1; $('#radius').value = '1';
     STATE.shown = PAGE;
