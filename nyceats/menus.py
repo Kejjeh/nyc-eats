@@ -14,6 +14,7 @@ one record per place_id:
   prices    dollar amounts printed next to that sentence, e.g. ["$185"]
   checked   date read (YYYY-MM-DD)
   reader    READER when read; an older (or missing) number was read by a crawl that skipped PDFs
+  pdf_timeouts  menu PDFs that took over PDF_SECONDS to read (only when there were any)
 
 Every status is counted and printed. A site that could not be read is "not checked",
 never "checked and found nothing": `build` only treats status ok as a reading.
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import io
 import logging
+import multiprocessing
 import re
 import time
 from collections import Counter
@@ -44,6 +46,10 @@ MAX_PAGES = 4
 MAX_PDFS = 2
 MAX_PDF_BYTES = 8_000_000
 MAX_PDF_PAGES = 12
+# pypdf has no time limit, and a crawl thread cannot be stopped, so each PDF is read in its own
+# process that is stopped after this many seconds (review of PR #14): one pathological PDF must
+# not hang the unattended monthly run.
+PDF_SECONDS = 30
 WORKERS = 8
 STALE_DAYS = 30
 # 2: PDF menus are read. `menus --upgrade` re-reads every site an older reader read.
@@ -177,11 +183,45 @@ def pdf_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PDFS
     return [url for _, url in sorted(pdf_candidates(base_url, links), key=lambda c: c[0])][:limit]
 
 
-def pdf_text(body: bytes) -> str:
+def pdf_text(body: bytes, timeout: float = PDF_SECONDS, extract=None) -> str | None:
+    """The PDF's text; "" for a PDF that cannot be read; None when reading took over `timeout` s.
+
+    Runs `extract` (default `_extract`) in a spawned process, so it can be stopped. Spawn, not fork:
+    the crawl runs in threads, and forking a threaded process can deadlock. `extract` must be a
+    module-level function (it is pickled to the child). Never raises.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    receive, send = ctx.Pipe(duplex=False)
+    child = ctx.Process(target=_pdf_child, args=(extract or _extract, body, send), daemon=True)
+    child.start()
+    send.close()
+    try:
+        text = receive.recv() if receive.poll(timeout) else None
+    except (EOFError, OSError):  # the child died without answering
+        text = ""
+    finally:
+        if child.is_alive():
+            child.terminate()
+        child.join(5)
+        receive.close()
+    return text
+
+
+def _pdf_child(extract, body, send) -> None:
+    try:
+        text = extract(body)
+        send.send(text if isinstance(text, str) else "")
+    except Exception:  # noqa: BLE001 - anything the parser raises means "unreadable"
+        send.send("")
+    finally:
+        send.close()
+
+
+def _extract(body: bytes) -> str:
     """The text of the first MAX_PDF_PAGES pages, or "" for a PDF that cannot be read.
 
-    Never raises: a broken or scanned PDF is one site's problem, and the crawl's "no text"
-    status already says a site had nothing to read.
+    A broken or scanned PDF is one site's problem, and the crawl's "no text" status already says a
+    site had nothing to read.
     """
     try:
         from pypdf import PdfReader
@@ -284,7 +324,8 @@ class _Fetcher:
             body = bytes(buf)
             if is_pdf:
                 # A PDF cut at the cap has no trailer and reads as "", which is "no text", not a guess.
-                return pdf_text(body), "pdf"
+                text = pdf_text(body)
+                return (None, "pdf timeout") if text is None else (text, "pdf")
             return decode(body, ctype), "ok"
 
 
@@ -354,10 +395,14 @@ def check_site(website: str, fetcher: _Fetcher) -> dict:
         if not (rp if same_site else fetcher.robots(url)).can_fetch(USER_AGENT, url):
             continue
         time.sleep(0.5)
-        t, _, _ = _read(fetcher, url)
+        t, _, status = _read(fetcher, url)
         if t:
             texts.append(t)
             rec["pages"].append(url)
+        elif status == "pdf timeout":
+            # Recorded, so a site whose menu PDF could not be read in time is visible in the data
+            # instead of quietly reading as a site that names no tasting menu.
+            rec.setdefault("pdf_timeouts", []).append(url)
     full = "\n".join(texts)
     if len(full) < 200:
         # A JavaScript-only site: there is nothing to read, which is not the same as "no tasting menu".
@@ -416,5 +461,6 @@ def crawl(limit: int | None = None, everything: bool = False, fetcher: _Fetcher 
     return {"read_now": len(todo), "status": dict(statuses), "menus_on_file": len(menus),
             "pdfs_read_now": sum(1 for pid, _ in todo for u in menus.get(pid, {}).get("pages", [])
                                  if urlparse(u).path.lower().endswith(".pdf")),
+            "pdf_timeouts_now": sum(len(menus.get(pid, {}).get("pdf_timeouts", [])) for pid, _ in todo),
             "ok_on_file": sum(1 for m in menus.values() if m.get("status") == "ok"),
             "evidence_by_theme": dict(themes)}

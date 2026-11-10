@@ -54,4 +54,6 @@ skipped PDF menu would now remove a true tag. The crawl reads up to `MAX_PDFS` =
 linked from the home page or its menu pages, on the site's own host or its site builder's file host
 (Squarespace keeps PDFs on static1.squarespace.com), with an 8 MB and 12-page cap, via `pypdf` (a new
 dependency). A scanned PDF has no text and adds nothing. Each record carries `reader` = `menus.READER`;
-`menus --upgrade` re-reads every site an older reader read.
+`menus --upgrade` re-reads every site an older reader read. Each PDF is read in its own
+process and stopped after `PDF_SECONDS` = 30 (pypdf has no time limit, and a stuck thread would hang the
+unattended monthly run); a stopped PDF is listed in the record's `pdf_timeouts`.

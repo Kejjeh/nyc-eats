@@ -1,4 +1,5 @@
 """Menu crawl: read restaurants' own sites without trusting a site that could not be read."""
+import time
 from urllib.robotparser import RobotFileParser
 
 from nyceats import menus
@@ -248,3 +249,23 @@ def test_a_curly_apostrophe_is_still_chefs():
     assert set(ev) == {"tasting-menu", "chefs-counter"}
     assert menus.current_evidence(ok_menu(**{"chefs-counter": "The Chef’s Table"})) == \
         {"chefs-counter": "The Chef’s Table"}
+
+
+def test_a_pdf_that_takes_too_long_is_stopped_and_said_so():
+    # pypdf has no time limit, and a crawl thread cannot be killed, so a PDF is read in its own
+    # process and stopped after PDF_SECONDS. time.sleep stands in for a parser that never ends:
+    # it is picklable, so the child process can run it.
+    start = time.monotonic()
+    assert menus.pdf_text(30, timeout=1, extract=time.sleep) is None
+    assert time.monotonic() - start < 15
+
+
+def test_a_parser_that_crashes_reads_as_empty_not_as_a_timeout():
+    assert menus.pdf_text(b"x", timeout=20, extract=len) == ""  # len returns an int, not text
+
+
+def test_a_timed_out_menu_pdf_is_recorded_on_the_site():
+    home = "<p>" + "Dinner nightly in Astoria. " * 10 + '</p><a href="/dinner.pdf">Dinner</a>'
+    f = FakeFetcher({"https://z.nyc/": home, "https://z.nyc/dinner.pdf": (None, "pdf timeout")})
+    rec = menus.check_site("https://z.nyc/", f)
+    assert rec["status"] == "ok" and rec["pdf_timeouts"] == ["https://z.nyc/dinner.pdf"]
