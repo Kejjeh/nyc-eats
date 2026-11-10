@@ -4,7 +4,7 @@ A public, always-current guide to good NYC restaurants: one place to find somewh
 from, near home or near a friend, and a data store a Claude chat can query for recommendations
 ("Italian, $$, open past 10, near this address").
 
-**Status (2026-11-10): live at https://kejjeh.github.io/nyc-eats/ with 6,433 restaurants across four
+**Status (2026-11-10): live at https://kejjeh.github.io/nyc-eats/ with 9,588 restaurants across four
 boroughs, refreshed monthly inside Google's free allowance.** Agents: start at `CLAUDE.md`. This README records the upstream
 measurements the design rests on (`sop-verify-upstream`); decisions are in `docs/adr/`.
 
