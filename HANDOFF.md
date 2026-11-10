@@ -26,9 +26,15 @@ left to run). Expected Google charge: $0.00.
 
 1. **Monthly refresh, 1st of each month, 9 AM.** This is a scheduled task on the owner's PC: "NYC Eats
    monthly refresh". It runs `python -m nyceats monthly --live`, opens a data PR and does **not** merge
-   it. The owner reviews and merges. December's allowance goes first to the 30 remaining roster details
-   and the 855 remaining quarter-cells, then to the oldest data for re-checks. It does not run live in
-   February or March until the shared-allowance check below is done.
+   it. The owner reviews and merges. It does not run live in February or March until the
+   shared-allowance check below is done. What December 1 will spend (dry run, 2026-11-10):
+   - **details:** the 30 roster places still without Google details;
+   - **nearby:** 950 of the 2,363 nearby searches still to run (split cells; a search that comes back
+     full adds four more), so the grid takes about three months to finish;
+   - **themed:** nothing. All 56 themed searches ran on 2026-11-09 and become due again only after
+     28 days (`discover.REFRESH_DAYS`), on 2026-12-07, so December's 950 themed calls go unused.
+   The end-to-end chain (spine, seed, dry run, build, menus, build) was run without Google on 2026-11-10:
+   exit 0, 6,433 restaurants, and only files the task is allowed to commit changed.
 2. **JavaScript-only sites.** About 6% of the sites read show no text without JavaScript, so they stay
    "not checked". PDF menus are read since 2026-11-10 (ADR 0004 amendment).
 3. **The Pool** (Google type event venue) is out under ADR 0005; adding one place by hand would need a
