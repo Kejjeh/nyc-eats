@@ -28,7 +28,7 @@ def test_themed_items_cover_every_theme_in_every_borough_bronx_first():
     items = themed_items()
     assert len(items) == len(THEMES) * 4
     assert items[0]["borough"] == "Bronx"
-    assert all(i["body"]["minRating"] == 4.2 for i in items)
+    assert all(i["body"]["minRating"] == 4.0 for i in items)  # the 0.5 step below 4.2: see the minRating tests
 
 
 def test_busy_cells_are_split_and_empty_ones_dropped():
@@ -224,7 +224,7 @@ def nearby_and_quarters(state):
 
 
 def test_a_fill_search_covers_each_full_square_whose_quarters_have_not_run():
-    from nyceats.plan import MIN_RATING, fill_items
+    from nyceats.plan import SEARCH_MIN_RATING, fill_items
     base, _ = nearby_and_quarters({})
     parent = base[0]
     assert fill_items(base, {parent["id"]: {"results": 12}}) == []  # not full: Nearby saw everything
@@ -233,7 +233,7 @@ def test_a_fill_search_covers_each_full_square_whose_quarters_have_not_run():
     fills = fill_items(base + quarters, state)
     assert len(fills) == 1 and fills[0]["square_of"] == parent["id"] and fills[0]["pool"] == "fill"
     body = fills[0]["body"]
-    assert body["minRating"] == MIN_RATING and body["includedType"] == "restaurant" and body["pageSize"] == 20
+    assert body["minRating"] == SEARCH_MIN_RATING and body["includedType"] == "restaurant" and body["pageSize"] == 20
     # The rectangle is the nearby circle's square: centred on it, inside the circle.
     c = parent["body"]["locationRestriction"]["circle"]
     rect = body["locationRestriction"]["rectangle"]
@@ -288,3 +288,43 @@ def test_a_fill_search_pages_on_only_while_pages_are_full_and_mostly_new(sandbox
     assert out["calls"] == 2 and out["pages_new"] == [20, 0] and out["new"] == 20
     assert led.used(POOL_SKU["fill"]) == 2
     assert all("fill" in places[f"F1-{i}"]["found_by"] for i in range(20))
+
+
+def test_text_searches_ask_for_a_rating_google_does_not_round_up():
+    # Google takes minRating in steps of 0.5 and rounds up: 4.2 behaved as 4.5. Of 938 text-search
+    # results to 2026-11-10 none was below 4.5, while 2,741 of the guide's 6,433 rows are 4.2-4.49.
+    # So searches ask for the step at or below the guide's floor, and the build keeps the 4.2 cut.
+    from nyceats.plan import MIN_RATING, SEARCH_MIN_RATING, fill_items
+    assert SEARCH_MIN_RATING * 2 == int(SEARCH_MIN_RATING * 2)
+    assert MIN_RATING - 0.5 < SEARCH_MIN_RATING <= MIN_RATING
+    state = {}
+    base, _ = nearby_and_quarters(state)
+    state[base[0]["id"]] = {"results": 20, "new": 9}
+    base, quarters = nearby_and_quarters(state)
+    text = themed_items() + fill_items(base + quarters, state)
+    assert text and {it["body"]["minRating"] for it in text} == {SEARCH_MIN_RATING}
+
+
+def test_a_text_search_run_with_another_min_rating_counts_as_never_run():
+    from datetime import datetime, timezone
+    from nyceats.discover import due
+    from nyceats.plan import SEARCH_MIN_RATING
+    plan = [{"id": i, "pool": p, "pages": 3 if p != "details" else 1, "body": {"minRating": SEARCH_MIN_RATING}}
+            for i, p in (("t-old", "themed"), ("t-ok", "themed"), ("t-none", "themed"), ("n", "nearby"))]
+    plan[-1]["body"] = {}
+    ran = "2026-11-09T00:00:00Z"
+    state = {"t-old": {"ran_at": ran, "min_rating": 4.2}, "t-ok": {"ran_at": ran, "min_rating": SEARCH_MIN_RATING},
+             "t-none": {"ran_at": ran}, "n": {"ran_at": ran}}
+    # Run with the filter that rounded to 4.5 (or before the filter was recorded): its 4.2-4.49
+    # places were never asked for, so it is due now, in plan order, ahead of anything stale.
+    assert [it["id"] for it in due(plan, state, datetime(2026, 11, 10, tzinfo=timezone.utc))] == ["t-old", "t-none"]
+
+
+def test_a_text_search_records_the_min_rating_it_ran_with(sandbox):
+    from nyceats.plan import SEARCH_MIN_RATING
+    item = themed_items()[0]
+    session = FillSession()
+    out = discover.run_item(Client("k", Ledger(paths.LEDGER, allow_new=True), session=session, pause=0),
+                            item, {}, "2026-11-10T00:00:00Z")
+    assert out["min_rating"] == SEARCH_MIN_RATING
+    assert all(body["minRating"] == SEARCH_MIN_RATING for _, body in session.sent)
