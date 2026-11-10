@@ -56,9 +56,10 @@ source fix belongs to nyc-restaurants.
 
 ## Known limits
 
-- **A PDF has no time limit.** `menus.pdf_text` is bounded by the 8 MB and 12-page caps, but pypdf has no
-  timeout; a pathological PDF could hold a crawl worker for a long time (review of PR #14). If a monthly
-  crawl stalls, this is the first suspect.
+- **A PDF gets 30 seconds.** pypdf has no time limit, so `menus.pdf_text` reads each PDF in its own
+  process and stops it after `PDF_SECONDS`. A stopped PDF is listed in the site's `pdf_timeouts` and counted
+  as `pdf_timeouts_now` in the crawl summary. It does not change the site's status, so the site can still
+  read as "names no tasting menu"; if that count is ever more than a handful, look at those sites.
 - **97 sites answered 429 (too many requests)** to the 2026-11-10 re-read: 97 different small-restaurant
   domains, which points to one shared host or ordering platform limiting the crawl (not checked).
   They count as "not read", so price still counts for them; the next monthly crawl retries them.
