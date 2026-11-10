@@ -209,3 +209,33 @@ def test_upgrade_rereads_sites_read_before_pdfs_were():
                "new": {"site": "https://new.nyc", "checked": "2026-11-09", "reader": menus.READER}}
     assert menus.due(places, on_file, "2026-11-10") == []
     assert menus.due(places, on_file, "2026-11-10", upgrade=True) == [("old", "https://old.nyc")]
+
+
+def test_dinner_and_tasting_pdfs_are_read_before_the_wine_list():
+    # Only MAX_PDFS are read: a wine list and brunch menu on the home page must not crowd out
+    # the tasting menu linked from /menu (review of PR #14).
+    home = '<a href="/wine-menu.pdf">Wine Menu</a> <a href="/brunch.pdf">Brunch Menu</a> <a href="/menu">Menu</a>'
+    _, links = menus.parse_html(home)
+    assert menus.pdf_links("https://x.nyc/", links) == ["https://x.nyc/wine-menu.pdf", "https://x.nyc/brunch.pdf"]
+    menu_page = '<a href="/files/9f3a.pdf">Tasting Menu</a>'
+    text = "<p>" + "A neighborhood restaurant in the West Village. " * 6 + "</p>"
+    f = FakeFetcher({"https://x.nyc/": text + home, "https://x.nyc/menu": menu_page,
+                     "https://x.nyc/files/9f3a.pdf": ("Seven-course tasting menu $165", "pdf"),
+                     "https://x.nyc/wine-menu.pdf": ("Wines by the glass", "pdf"),
+                     "https://x.nyc/brunch.pdf": ("Brunch", "pdf")})
+    rec = menus.check_site("https://x.nyc/", f)
+    assert rec["pages"][2] == "https://x.nyc/files/9f3a.pdf" and "tasting-menu" in rec["evidence"]
+
+
+def test_a_www_site_reads_its_bare_host_pdfs_under_its_own_robots():
+    class Counting(FakeFetcher):
+        robots_calls = 0
+
+        def robots(self, url):
+            Counting.robots_calls += 1
+            return super().robots(url)
+    text = "<p>" + "Dinner nightly in Astoria. " * 10 + "</p>"
+    f = Counting({"https://www.y.nyc/": text + '<a href="https://y.nyc/dinner.pdf">Dinner</a>',
+                  "https://y.nyc/dinner.pdf": ("Prix fixe dinner $95", "pdf")})
+    rec = menus.check_site("https://www.y.nyc/", f)
+    assert "prix-fixe" in rec["evidence"] and Counting.robots_calls == 1

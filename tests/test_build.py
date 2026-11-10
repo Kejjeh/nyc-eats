@@ -27,7 +27,7 @@ DINNER = {"dine_in": True, "serves_dinner": True}
     # The review floor (owner ruling, issue #4 item 2): 20 reviews or more.
     ({"primary_type": "italian_restaurant", "types": ["restaurant"]}, 5.0, "Bronx", 19, "fewer than 20 reviews"),
     ({"primary_type": "italian_restaurant", "types": ["restaurant"]}, 5.0, "Bronx", 20, None),
-    (None, 4.6, "Manhattan", None, "fewer than 20 reviews"),  # no count is not a count
+    (None, 4.6, "Manhattan", None, "no review count"),  # not a count, and not counted as a low one
     # Dine-in dinner at a deli, sandwich shop, cafe or wine bar (issue #4 item 3): Katz's, Mile End, Terroir.
     ({"primary_type": "deli", "types": ["deli", "food"], **DINNER}, 4.5, "Manhattan", 56601, None),
     ({"primary_type": "sandwich_shop", "types": ["sandwich_shop"], **DINNER}, 4.4, "Brooklyn", 1451, None),

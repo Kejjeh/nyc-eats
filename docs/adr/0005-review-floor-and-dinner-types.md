@@ -19,8 +19,8 @@ Measured on the November guide (6,598 restaurants):
 ## Decision
 
 1. **Review floor.** A restaurant needs `build.MIN_REVIEWS` = 20 Google reviews to be in the guide. A
-   row with no review count is treated as having none. Counted as "fewer than 20 reviews" in
-   `meta.left_out`.
+   row below it is counted as "fewer than 20 reviews" in `meta.left_out`. A row with no review count
+   at all is left out as "no review count" (none today), so a seed that loses its counts shows up.
 2. **Dinner types.** A place whose primary type is in `build.DINNER_TYPES` (deli, sandwich shop, cafe,
    wine bar) stays in when Google says **both** dine-in and serves dinner. Both must be `True`; unknown
    is not yes. Bars, pubs, cocktail bars and the rest of `plan.EXCLUDED_PRIMARY` stay out even then:

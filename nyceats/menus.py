@@ -140,14 +140,22 @@ def menu_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PAG
     return out
 
 
-def pdf_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PDFS) -> list[str]:
-    """PDF links whose URL or label looks like a menu, in page order, no repeats.
+# Only MAX_PDFS are read, so the dinner and tasting menus go first and the wine list, brunch or
+# private-events PDFs last (review of PR #14): a skipped tasting-menu PDF would read as "silent".
+PDF_FIRST = re.compile(r"tasting|dinner|prix|omakase|kaiseki|course|chef|seasonal", re.I)
+PDF_LAST = re.compile(r"wine|drink|cocktail|beverage|\bbar\b|brunch|lunch|dessert|kid|happy|catering|"
+                      r"event|private|party|press|gift", re.I)
 
+
+def pdf_candidates(base_url: str, links: list[tuple[str, str]]) -> list[tuple[int, str]]:
+    """(rank, url) for PDF links whose URL or label looks like a menu, in page order, no repeats.
+
+    Rank 0 names dinner or a tasting menu, 2 names drinks, brunch or events, 1 is anything else.
     Unlike `menu_links`, any host is allowed: restaurant sites built on Squarespace, Wix or
     BentoBox keep their PDFs on the builder's file host (static1.squarespace.com), and a menu
     PDF linked from the restaurant's own page is the restaurant's own menu.
     """
-    out: list[str] = []
+    out: list[tuple[int, str]] = []
     for href, label in links:
         if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
             continue
@@ -155,12 +163,16 @@ def pdf_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PDFS
         u = urlparse(url)
         if u.scheme not in ("http", "https") or not u.path.lower().endswith(".pdf"):
             continue
-        if not (MENU_LINK.search(u.path) or MENU_LINK.search(label)) or url in out:
+        if not (MENU_LINK.search(u.path) or MENU_LINK.search(label)) or url in (v for _, v in out):
             continue
-        out.append(url)
-        if len(out) >= limit:
-            break
+        words = f"{u.path} {label}"
+        out.append((0 if PDF_FIRST.search(words) else 2 if PDF_LAST.search(words) else 1, url))
     return out
+
+
+def pdf_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PDFS) -> list[str]:
+    """The `limit` best menu PDFs on one page: dinner and tasting menus first, then page order."""
+    return [url for _, url in sorted(pdf_candidates(base_url, links), key=lambda c: c[0])][:limit]
 
 
 def pdf_text(body: bytes) -> str:
@@ -260,11 +272,12 @@ class _Fetcher:
             if not is_pdf and "html" not in ctype and "text" not in ctype and ctype:
                 return None, f"error type {ctype.split(';')[0]}"
             cap = MAX_PDF_BYTES if is_pdf else MAX_BYTES
-            body = b""
+            buf = bytearray()
             for chunk in r.iter_content(65536):
-                body += chunk
-                if len(body) > cap:
+                buf += chunk
+                if len(buf) > cap:
                     break
+            body = bytes(buf)
             if is_pdf:
                 # A PDF cut at the cap has no trailer and reads as "", which is "no text", not a guess.
                 return pdf_text(body), "pdf"
@@ -326,11 +339,14 @@ def check_site(website: str, fetcher: _Fetcher) -> dict:
             texts.append(t)
             all_links.append((url, page_links))
             rec["pages"].append(url)
-    pdfs: list[str] = []
+    candidates: list[tuple[int, str]] = []
     for base, page_links in all_links:
-        pdfs += [u for u in pdf_links(base, page_links) if u not in pdfs and u not in rec["pages"]]
+        candidates += [c for c in pdf_candidates(base, page_links)
+                       if c[1] not in rec["pages"] and c[1] not in (u for _, u in candidates)]
+    pdfs = [url for _, url in sorted(candidates, key=lambda c: c[0])]  # stable: home page first per rank
+    host = urlparse(website).netloc.lower().removeprefix("www.")
     for url in pdfs[:MAX_PDFS]:
-        same_site = urlparse(url).netloc == urlparse(website).netloc
+        same_site = urlparse(url).netloc.lower().removeprefix("www.") == host
         if not (rp if same_site else fetcher.robots(url)).can_fetch(USER_AGENT, url):
             continue
         time.sleep(0.5)

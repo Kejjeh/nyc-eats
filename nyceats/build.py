@@ -197,7 +197,9 @@ def leave_out_reason(g: dict | None, rating, borough, reviews) -> str | None:
         return "no rating"
     if rating < MIN_RATING:
         return f"rated below {MIN_RATING}"
-    if (reviews or 0) < MIN_REVIEWS:
+    if reviews is None:
+        return "no review count"  # its own reason, so a seed that lost its counts shows up in left_out
+    if reviews < MIN_REVIEWS:
         return f"fewer than {MIN_REVIEWS} reviews"
     if g and g.get("primary_type") in DINNER_TYPES and g.get("dine_in") is True and g.get("serves_dinner") is True:
         return None

@@ -365,8 +365,7 @@ function renderPresets() {
 
 /* The two scope buttons carry live counts, so a filter that finds nothing among the award
    winners still shows how many it finds in Everything. */
-function renderScope() {
-  const any = STATE.rows.filter((r) => matches(r, null, true));
+function renderScope(any) {
   $('#scopeAwardsN').textContent = any.filter((r) => inScope(r, 'awards')).length.toLocaleString();
   $('#scopeAllN').textContent = any.length.toLocaleString();
   $('#scopeAwards').setAttribute('aria-pressed', String(STATE.scope === 'awards'));
@@ -395,7 +394,7 @@ function renderActive() {
 }
 
 /* Say which control emptied the list, not just "nothing matches". */
-function emptyMessage() {
+function emptyMessage(anyScopeCount) {
   const msg = $opt('#emptyMsg');
   const loose = STATE.rows.filter((r) => r.rating != null && r.rating >= STATE.minRating).length;
   const parts = [];
@@ -413,7 +412,7 @@ function emptyMessage() {
     unknownHours = STATE.rows.filter((r) => matches(r) && openState(r) == null).length;
     [STATE.openNow, STATE.openAt] = keep;
   }
-  const elsewhere = STATE.scope === 'awards' ? STATE.rows.filter((r) => matches(r, null, true)).length : 0;
+  const elsewhere = STATE.scope === 'awards' ? anyScopeCount : 0;
   if (elsewhere) {
     msg.textContent = `No award winner rated ${STATE.minRating}+ is ${parts.join(', ') || 'listed'}, `
       + `but ${elsewhere.toLocaleString()} other restaurant${elsewhere === 1 ? ' is' : 's are'}. Press Everything to see ${elsewhere === 1 ? 'it' : 'them'}.`;
@@ -427,7 +426,9 @@ function emptyMessage() {
 }
 
 function apply() {
-  const hits = STATE.rows.filter((r) => matches(r));
+  // One pass over the rows ignoring scope; the scope is then a cheap second filter (review of PR #14).
+  const any = STATE.rows.filter((r) => matches(r, null, true));
+  const hits = any.filter((r) => inScope(r, STATE.scope));
   hits.sort(SORTS[STATE.sort] || SORTS.score);
   const box = $('#rows');
   box.textContent = '';
@@ -439,12 +440,12 @@ function apply() {
   $('#shown').textContent = String(STATE.view === 'list' ? Math.min(STATE.shown, hits.length) : hits.length);
   $('#total').textContent = String(hits.length);
   $('#empty').hidden = hits.length !== 0;
-  if (!hits.length) emptyMessage();
+  if (!hits.length) emptyMessage(any.length);
   const more = $('#showMore');
   more.hidden = STATE.view !== 'list' || hits.length <= STATE.shown;
   more.textContent = `Show ${Math.min(PAGE, hits.length - STATE.shown)} more`;
   renderActive();
-  renderScope();
+  renderScope(any);
   const focused = document.activeElement && document.activeElement.id;
   renderFacets();
   if (focused) { const again = document.getElementById(focused); if (again) again.focus(); }
