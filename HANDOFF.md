@@ -1,12 +1,14 @@
 # Handoff
 
-## State (2026-11-09)
+## State (2026-11-10)
 
 **Live at https://kejjeh.github.io/nyc-eats/** (GitHub Pages, main `/docs`). The payload holds
-**6,598 restaurants** (Bronx 665, Brooklyn 1,761, Manhattan 2,653, Queens 1,519), 6,585 with Google
-details. Categories: 378 prix fixe, 262 tasting menu, 262 omakase & chef's counter, 99 fine dining,
-18 unusual proteins. 608 of the categories come from the restaurants' own sites. City health grades:
-A 3,615, B 322, C 90.
+**6,433 restaurants** (Bronx 601, Brooklyn 1,729, Manhattan 2,637, Queens 1,466), 6,420 with Google
+details, built under the issue #4 rulings (ADR 0005, 0006). The page opens on the 425 award winners.
+Categories: 352 prix fixe, 221 tasting menu, 255 omakase & chef's counter, 99 fine dining, 17 unusual
+proteins. 662 of the categories come from the restaurants' own sites, including 690 PDF menus read on
+2026-11-10. 76 rest on price (51 fine dining, 25 where the site could not be read). City health grades:
+A 3,602, B 320, C 88.
 
 November's free allowance is spent: details 950/950, nearby 950/950, themed 103 (no themed items are
 left to run). Expected Google charge: $0.00.
@@ -53,6 +55,13 @@ are one room named twice; a few are two businesses (Contra / Bar Contra). They a
 source fix belongs to nyc-restaurants.
 
 ## Known limits
+
+- **A PDF has no time limit.** `menus.pdf_text` is bounded by the 8 MB and 12-page caps, but pypdf has no
+  timeout; a pathological PDF could hold a crawl worker for a long time (review of PR #14). If a monthly
+  crawl stalls, this is the first suspect.
+- **97 sites answered 429 (too many requests)** to the 2026-11-10 re-read: 97 different small-restaurant
+  domains, which points to one shared host or ordering platform limiting the crawl (not checked).
+  They count as "not read", so price still counts for them; the next monthly crawl retries them.
 
 - **The ledger sees only this repo's calls.** Google's free allowance is per billing account. ADR 0002
   assumes omakase and nyc-restaurants use legacy Places SKUs that don't share these caps. That is not
