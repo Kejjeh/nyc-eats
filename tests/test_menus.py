@@ -48,7 +48,10 @@ class FakeFetcher:
 
     def get(self, url):
         self.seen.append(url)
-        return (self.pages[url], "ok") if url in self.pages else (None, "http 404")
+        if url not in self.pages:
+            return None, "http 404"
+        v = self.pages[url]
+        return v if isinstance(v, tuple) else (v, "ok")
 
 
 def test_check_site_reads_the_home_page_and_its_menu(monkeypatch):
@@ -145,3 +148,64 @@ def test_a_long_sentence_keeps_the_words_that_matched():
     assert "omakase" in ev["omakase"] and ev["omakase"].startswith("…") and len(ev["omakase"]) <= 221
     # A first-crawl sentence cut at 220 from its start keeps its standing; the one-off check still applies.
     assert menus.current_evidence(ok_menu(omakase=long[:220])) == {"omakase": long[:220]}
+
+
+def tiny_pdf(text: str) -> bytes:
+    """A one-page PDF with one line of text, built by hand so the test needs no fixture file."""
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            b"/Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+    return out
+
+
+def test_pdf_text_reads_a_menu_and_never_raises():
+    assert "Chef's tasting menu $185" in menus.pdf_text(tiny_pdf("Chef's tasting menu $185"))
+    assert menus.pdf_text(b"<html>not a pdf</html>") == ""
+
+
+def test_pdf_links_follow_menu_pdfs_on_the_site_or_its_file_host():
+    page = """<a href="/menus/dinner.pdf">Dinner PDF</a> <a href="/press/review.pdf">Press</a>
+    <a href="https://static1.squarespace.com/static/5f/t/66/Tasting+Menu.pdf">Download</a>
+    <a href="/menu">Menu</a>"""
+    _, links = menus.parse_html(page)
+    assert menus.pdf_links("https://kono.nyc/", links) == [
+        "https://kono.nyc/menus/dinner.pdf", "https://static1.squarespace.com/static/5f/t/66/Tasting+Menu.pdf"]
+
+
+def test_check_site_reads_a_pdf_menu_linked_from_the_menu_page(monkeypatch):
+    # The common shape: home -> /menu (an HTML page that only links the PDF) -> dinner.pdf.
+    monkeypatch.setattr(menus.time, "sleep", lambda s: None)
+    home = "<p>" + "A neighborhood restaurant in the West Village. " * 6 + '</p><a href="/menu">Menu</a>'
+    menu_page = '<p>Our menus change with the season.</p><a href="/files/dinner.pdf">Dinner</a>'
+    f = FakeFetcher({"https://x.nyc/": home, "https://x.nyc/menu": menu_page,
+                     "https://x.nyc/files/dinner.pdf": ("Seven-course tasting menu $165 per guest", "pdf")})
+    rec = menus.check_site("https://x.nyc/", f)
+    assert rec["status"] == "ok" and rec["reader"] == menus.READER
+    assert rec["pages"][-1] == "https://x.nyc/files/dinner.pdf"
+    assert "tasting menu" in rec["evidence"]["tasting-menu"] and rec["prices"] == ["$165"]
+
+
+def test_a_site_whose_home_page_is_a_pdf_is_read():
+    f = FakeFetcher({"https://p.nyc/": ("Omakase counter, 18 courses. " * 10, "pdf")})
+    rec = menus.check_site("https://p.nyc/", f)
+    assert rec["status"] == "ok" and set(rec["evidence"]) >= {"omakase", "tasting-menu"}
+
+
+def test_upgrade_rereads_sites_read_before_pdfs_were():
+    places = {"old": {"website": "https://old.nyc"}, "new": {"website": "https://new.nyc"}}
+    on_file = {"old": {"site": "https://old.nyc", "checked": "2026-11-09"},
+               "new": {"site": "https://new.nyc", "checked": "2026-11-09", "reader": menus.READER}}
+    assert menus.due(places, on_file, "2026-11-10") == []
+    assert menus.due(places, on_file, "2026-11-10", upgrade=True) == [("old", "https://old.nyc")]

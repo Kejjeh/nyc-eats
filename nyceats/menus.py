@@ -2,20 +2,26 @@
 
 Free (no Google calls), but it visits about a thousand small sites, so it is polite:
 robots.txt is obeyed, one request at a time per site, a 10 s timeout, a 2 MB cap
-per page, at most `MAX_PAGES` pages per site (the home page plus links that look
-like a menu). Results go to `data/menus.json`, one record per place_id:
+per page (8 MB for a PDF), at most `MAX_PAGES` pages per site (the home page plus
+links that look like a menu) and `MAX_PDFS` PDF menus linked from those pages.
+Many restaurants publish the menu only as a PDF, so a site read without its PDFs
+can look silent when it is not (issue #4 item 5). Results go to `data/menus.json`,
+one record per place_id:
 
-  status    ok | robots | http <code> | error <kind> | pdf only | no text
+  status    ok | robots | http <code> | error <kind> | no text
   pages     the URLs read
   evidence  theme -> the sentence that mentions it ("Our 10-course tasting menu ...")
   prices    dollar amounts printed next to that sentence, e.g. ["$185"]
   checked   date read (YYYY-MM-DD)
+  reader    READER when read; an older (or missing) number was read by a crawl that skipped PDFs
 
 Every status is counted and printed. A site that could not be read is "not checked",
 never "checked and found nothing": `build` only treats status ok as a reading.
 """
 from __future__ import annotations
 
+import io
+import logging
 import re
 import time
 from collections import Counter
@@ -35,8 +41,13 @@ USER_AGENT = "nyc-eats-menu-check/1.0 (+https://kejjeh.github.io/nyc-eats/)"
 TIMEOUT = 10
 MAX_BYTES = 2_000_000
 MAX_PAGES = 4
+MAX_PDFS = 2
+MAX_PDF_BYTES = 8_000_000
+MAX_PDF_PAGES = 12
 WORKERS = 8
 STALE_DAYS = 30
+# 2: PDF menus are read. `menus --upgrade` re-reads every site an older reader read.
+READER = 2
 
 # What a restaurant's own site has to say for a theme to count as checked on its menu.
 # Narrower than build.THEME_WORDS: a site is long, so a loose word ("counter", "game")
@@ -129,6 +140,44 @@ def menu_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PAG
     return out
 
 
+def pdf_links(base_url: str, links: list[tuple[str, str]], limit: int = MAX_PDFS) -> list[str]:
+    """PDF links whose URL or label looks like a menu, in page order, no repeats.
+
+    Unlike `menu_links`, any host is allowed: restaurant sites built on Squarespace, Wix or
+    BentoBox keep their PDFs on the builder's file host (static1.squarespace.com), and a menu
+    PDF linked from the restaurant's own page is the restaurant's own menu.
+    """
+    out: list[str] = []
+    for href, label in links:
+        if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
+            continue
+        url = urljoin(base_url, href).split("#")[0]
+        u = urlparse(url)
+        if u.scheme not in ("http", "https") or not u.path.lower().endswith(".pdf"):
+            continue
+        if not (MENU_LINK.search(u.path) or MENU_LINK.search(label)) or url in out:
+            continue
+        out.append(url)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def pdf_text(body: bytes) -> str:
+    """The text of the first MAX_PDF_PAGES pages, or "" for a PDF that cannot be read.
+
+    Never raises: a broken or scanned PDF is one site's problem, and the crawl's "no text"
+    status already says a site had nothing to read.
+    """
+    try:
+        from pypdf import PdfReader
+        logging.getLogger("pypdf").setLevel(logging.ERROR)  # malformed-but-readable PDFs are common
+        reader = PdfReader(io.BytesIO(body))
+        return "\n".join((page.extract_text() or "") for page in reader.pages[:MAX_PDF_PAGES]).strip()
+    except Exception:  # noqa: BLE001 - pypdf raises many kinds on a bad file; all mean "unreadable"
+        return ""
+
+
 def find_evidence(text: str) -> tuple[dict[str, str], list[str]]:
     """theme -> the sentence that mentions it; and dollar amounts in those sentences."""
     evidence: dict[str, str] = {}
@@ -191,7 +240,8 @@ class _Fetcher:
         return rp
 
     def get(self, url: str) -> tuple[str | None, str]:
-        """(html, status). status is 'ok' or why there is no HTML."""
+        """(content, status). status 'ok': content is HTML; 'pdf': content is the PDF's text;
+        anything else says why there is no content."""
         try:
             r = self.s.get(url, timeout=TIMEOUT, stream=True, allow_redirects=True)
         except requests.Timeout:
@@ -206,15 +256,18 @@ class _Fetcher:
             if not r.ok:
                 return None, f"http {r.status_code}"
             ctype = r.headers.get("Content-Type", "").lower()
-            if "pdf" in ctype:
-                return None, "pdf only"
-            if "html" not in ctype and "text" not in ctype and ctype:
+            is_pdf = "pdf" in ctype or urlparse(url).path.lower().endswith(".pdf")
+            if not is_pdf and "html" not in ctype and "text" not in ctype and ctype:
                 return None, f"error type {ctype.split(';')[0]}"
+            cap = MAX_PDF_BYTES if is_pdf else MAX_BYTES
             body = b""
             for chunk in r.iter_content(65536):
                 body += chunk
-                if len(body) > MAX_BYTES:
+                if len(body) > cap:
                     break
+            if is_pdf:
+                # A PDF cut at the cap has no trailer and reads as "", which is "no text", not a guess.
+                return pdf_text(body), "pdf"
             return decode(body, ctype), "ok"
 
 
@@ -235,27 +288,55 @@ def decode(body: bytes, content_type: str = "") -> str:
         return body.decode("cp1252", errors="replace")
 
 
+def _read(fetcher: _Fetcher, url: str) -> tuple[str | None, list, str]:
+    """(text, links, status) of one page or PDF."""
+    content, status = fetcher.get(url)
+    if content is None:
+        return None, [], status
+    if status == "pdf":
+        return content, [], "ok"
+    text, links = parse_html(content)
+    return text, links, "ok"
+
+
 def check_site(website: str, fetcher: _Fetcher) -> dict:
-    """Read one restaurant's site. Never raises for a site problem; the status says what happened."""
-    rec = {"site": website, "pages": [], "evidence": {}, "prices": [], "checked": now_iso()[:10]}
+    """Read one restaurant's site. Never raises for a site problem; the status says what happened.
+
+    The home page, then up to MAX_PAGES - 1 menu pages it links, then up to MAX_PDFS menu PDFs
+    linked from any of those (the usual shape is home -> /menu -> dinner.pdf).
+    """
+    rec = {"site": website, "pages": [], "evidence": {}, "prices": [], "checked": now_iso()[:10],
+           "reader": READER}
     rp = fetcher.robots(website)
     if not rp.can_fetch(USER_AGENT, website):
         rec["status"] = "robots"
         return rec
-    html, status = fetcher.get(website)
-    if html is None:
+    text, links, status = _read(fetcher, website)
+    if text is None:
         rec["status"] = status
         return rec
-    text, links = parse_html(html)
-    texts = [text]
+    texts, all_links = [text], [(website, links)]
     rec["pages"].append(website)
     for url in menu_links(website, links):
         if not rp.can_fetch(USER_AGENT, url):
             continue
         time.sleep(0.5)  # one site, one request at a time, with a pause
-        h, _ = fetcher.get(url)
-        if h:
-            texts.append(parse_html(h)[0])
+        t, page_links, _ = _read(fetcher, url)
+        if t:
+            texts.append(t)
+            all_links.append((url, page_links))
+            rec["pages"].append(url)
+    pdfs: list[str] = []
+    for base, page_links in all_links:
+        pdfs += [u for u in pdf_links(base, page_links) if u not in pdfs and u not in rec["pages"]]
+    for url in pdfs[:MAX_PDFS]:
+        same_site = urlparse(url).netloc == urlparse(website).netloc
+        if not (rp if same_site else fetcher.robots(url)).can_fetch(USER_AGENT, url):
+            continue
+        time.sleep(0.5)
+        t, _, _ = _read(fetcher, url)
+        if t:
+            texts.append(t)
             rec["pages"].append(url)
     full = "\n".join(texts)
     if len(full) < 200:
@@ -268,8 +349,10 @@ def check_site(website: str, fetcher: _Fetcher) -> dict:
 
 
 def due(places: dict, menus: dict, today: str, everything: bool = False,
-        scope: set | None = None) -> list[tuple[str, str]]:
+        scope: set | None = None, upgrade: bool = False) -> list[tuple[str, str]]:
     """(place_id, website) pairs to read now: never read, read for another URL, or older than STALE_DAYS.
+
+    `upgrade` also re-reads every site an older READER read (before PDFs were read).
 
     `scope` limits the crawl to places in the published guide: most places discovery finds are
     rated below 4.2 or are not restaurants, and their sites are not worth a visit.
@@ -284,7 +367,7 @@ def due(places: dict, menus: dict, today: str, everything: bool = False,
         if not site:
             continue
         old = menus.get(pid)
-        if everything or not old or old.get("site") != site:
+        if everything or not old or old.get("site") != site or (upgrade and old.get("reader", 1) < READER):
             out.append((pid, site))
             continue
         age = (t - date.fromisoformat(old["checked"])).days
@@ -294,12 +377,12 @@ def due(places: dict, menus: dict, today: str, everything: bool = False,
 
 
 def crawl(limit: int | None = None, everything: bool = False, fetcher: _Fetcher | None = None,
-          workers: int = WORKERS) -> dict:
+          workers: int = WORKERS, upgrade: bool = False) -> dict:
     places = read_json(paths.PLACES, default={})
     menus = read_json(paths.MENUS, default={})
     site = read_json(paths.SITE_DATA, default={"restaurants": None})
     scope = {r["id"] for r in site["restaurants"]} if site["restaurants"] is not None else None
-    todo = due(places, menus, now_iso()[:10], everything, scope)[: limit or None]
+    todo = due(places, menus, now_iso()[:10], everything, scope, upgrade)[: limit or None]
     fetcher = fetcher or _Fetcher()
     statuses: Counter = Counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -311,5 +394,7 @@ def crawl(limit: int | None = None, everything: bool = False, fetcher: _Fetcher 
     write_json(paths.MENUS, menus, compact_rows=True)
     themes = Counter(t for m in menus.values() if m.get("status") == "ok" for t in m.get("evidence", {}))
     return {"read_now": len(todo), "status": dict(statuses), "menus_on_file": len(menus),
+            "pdfs_read_now": sum(1 for pid, _ in todo for u in menus.get(pid, {}).get("pages", [])
+                                 if urlparse(u).path.lower().endswith(".pdf")),
             "ok_on_file": sum(1 for m in menus.values() if m.get("status") == "ok"),
             "evidence_by_theme": dict(themes)}

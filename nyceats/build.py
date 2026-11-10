@@ -20,6 +20,14 @@ from .plan import EXCLUDED_PRIMARY, MIN_RATING, THEME_CATEGORY
 # How many reviews of doubt a rating is shrunk by: the same m = 150 the nyc-restaurants
 # pages use (its src/config.py GOOGLE_PRIOR), since this site is built from that page code.
 PRIOR = 150
+# Fewer reviews than this and a rating says too little to rank (owner ruling, issue #4 item 2:
+# 170 places left the guide in November; none of them held an award).
+MIN_REVIEWS = 20
+# Primary types left out as not sit-down that come back when Google says the place seats diners
+# for dinner (owner ruling, issue #4 item 3): Katz's, Mile End Deli, Terroir. Bars stay out even
+# then (a cocktail bar or sports pub with food is not a dinner restaurant), and so does the rest
+# of plan.EXCLUDED_PRIMARY. See ADR 0005.
+DINNER_TYPES = {"deli", "sandwich_shop", "cafe", "wine_bar"}
 
 AWARD_LABELS = {
     ("michelin", "3 stars"): "Michelin ★★★", ("michelin", "2 stars"): "Michelin ★★",
@@ -89,7 +97,14 @@ def theme_evidence(theme: str, g: dict, menu: dict | None = None) -> str | None:
         return "restaurant's own site"
     floor = PRICE_EVIDENCE.get(theme)
     if floor and (g.get("price_level") or 0) >= floor:
-        return f"price {'$' * g['price_level']}"
+        price = f"price {'$' * g['price_level']}"
+        # Issue #4 item 5: where the restaurant's own site was read and names no such meal, price
+        # alone is no longer evidence of one, except for fine dining, which $$$$ comes close to
+        # defining. An unread site says nothing either way, so price still counts there.
+        if THEME_CATEGORY.get(theme) == "Fine dining":
+            return price
+        if not (menu and menu.get("status") == "ok"):
+            return f"{price}, own site not read"
     return None
 
 
@@ -173,7 +188,7 @@ def previous_month(history_dir, month: str) -> tuple[str | None, dict | None]:
     return (files[-1].stem, read_json(files[-1])) if files else (None, None)
 
 
-def leave_out_reason(g: dict | None, rating, borough) -> str | None:
+def leave_out_reason(g: dict | None, rating, borough, reviews) -> str | None:
     if borough is None:
         return "outside the four boroughs (ZIP not in the City spine)"
     if g and g.get("business_status") not in (None, "OPERATIONAL"):
@@ -182,6 +197,10 @@ def leave_out_reason(g: dict | None, rating, borough) -> str | None:
         return "no rating"
     if rating < MIN_RATING:
         return f"rated below {MIN_RATING}"
+    if (reviews or 0) < MIN_REVIEWS:
+        return f"fewer than {MIN_REVIEWS} reviews"
+    if g and g.get("primary_type") in DINNER_TYPES and g.get("dine_in") is True and g.get("serves_dinner") is True:
+        return None
     if g and g.get("primary_type") in EXCLUDED_PRIMARY:
         return f"not sit-down ({g['primary_type']})"
     if g and g.get("dine_in") is False:
@@ -231,7 +250,7 @@ def build(write: bool = True) -> dict:
         reviews = (g or {}).get("reviews") if g and g.get("reviews") is not None else (s or {}).get("reviews")
         zip_code = zip_from_address(address)
         borough = zb.get(zip_code) or (s or {}).get("borough")
-        reason = leave_out_reason(g, rating, borough)
+        reason = leave_out_reason(g, rating, borough, reviews)
         if reason:
             left_out[reason] += 1
             continue
@@ -294,7 +313,7 @@ def build(write: bool = True) -> dict:
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "restaurants": len(rows), "by_borough": dict(Counter(r["borough"] for r in rows)),
         "with_google_details": sum(1 for r in rows if r["source"] == "google"),
-        "prior": PRIOR, "rating_mean": mean, "min_rating": MIN_RATING,
+        "prior": PRIOR, "rating_mean": mean, "min_rating": MIN_RATING, "min_reviews": MIN_REVIEWS,
         "left_out": dict(left_out), "neighborhood_match": dict(matched),
         "theme_matches_without_evidence": dict(Counter(untagged)),
         "menus": {"read": sum(1 for r in rows if r["menu"]),

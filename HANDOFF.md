@@ -27,22 +27,26 @@ left to run). Expected Google charge: $0.00.
    it. The owner reviews and merges. December's allowance goes first to the 30 remaining roster details
    and the 855 remaining quarter-cells, then to the oldest data for re-checks. It does not run live in
    February or March until the shared-allowance check below is done.
-2. **Owner decisions in #4.** Score method, minimum reviews, what counts as sit-down, what sorts to the
-   top (only 2 of the top 100 have an award), and price as evidence. Each item has measured options.
-3. **Menu PDFs and JavaScript sites.** About 6% of the sites read show no text without JavaScript, and
-   PDF menus are skipped. Reading PDFs (one new dependency) would check more menus.
+2. **JavaScript-only sites.** About 6% of the sites read show no text without JavaScript, so they stay
+   "not checked". PDF menus are read since 2026-11-10 (ADR 0004 amendment).
+3. **The Pool** (Google type event venue) is out under ADR 0005; adding one place by hand would need a
+   pin mechanism this repo does not have.
 4. **Themed allowance.** 847 themed calls go unused each month once the 14 themes have run. Possible
    uses: new themes (each needs words in `build.THEME_WORDS`, ADR 0003), or re-running the themes monthly
    (stale items do this after 28 days).
 
-## Open owner decisions
+## Owner decisions
 
-All in #4, with numbers:
-1. Score method (shrinkage vs Wilson): the two now share 9 of the top 10.
-2. Minimum reviews: 21 rows have fewer than 20.
-3. Sit-down by type: 16 places Google says serve dine-in dinner are left out by type (Katz's, Terroir…).
-4. What sorts to the top.
-5. Price as tasting-menu evidence: 179 price-only tags whose own site was read and says nothing.
+Issue #4 was ruled on 2026-11-10 ("Yes, all five"):
+1. Score method: keep the shrinkage score, not Wilson (ADR 0006).
+2. Minimum reviews: 20 (ADR 0005).
+3. Sit-down: delis, sandwich shops, cafes and wine bars that Google says serve dine-in dinner are in;
+   bars stay out (ADR 0005).
+4. What sorts to the top: the page opens on the award winners, with an Everything button (ADR 0006).
+5. Price as evidence: counts for fine dining always, and for tasting / prix fixe / omakase only when the
+   restaurant's own site could not be read (ADR 0003 second follow-up). PDF menus are read first.
+
+No owner decision is open.
 
 Also: **shared place_ids in the roster.** 25 place_ids carry two roster rows in nyc-restaurants. Most
 are one room named twice; a few are two businesses (Contra / Bar Contra). They are merged here; the

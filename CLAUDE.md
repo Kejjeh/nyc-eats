@@ -13,8 +13,8 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 ## Commands (all verified from repo root, 2026-11-09, Windows, Python 3.13, node 24)
 
 ```bash
-pip install -r requirements.txt                 # requests, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 127 passed (node tests skip without node)
+pip install -r requirements.txt                 # requests, pypdf, pytest, tzdata
+python -m pytest tests -q                       # ~1s. Expect: 151 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
@@ -41,10 +41,10 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 | `nyceats/places_api.py` | Field masks, `sku_for` (bills at the highest field tier), `parse_place`, `Client` |
 | `nyceats/plan.py` | Discovery plan: three pools (details, themed, nearby), stable item ids, density grid |
 | `nyceats/discover.py` | Dry run / live run; merges results into `data/places.json`; resumes from `data/discovery_state.json` |
-| `nyceats/menus.py` | Menu crawl (ADR 0004): robots.txt, menu-link finder, evidence sentences + prices → `data/menus.json` |
-| `nyceats/build.py` | Scope filter (`leave_out_reason`), category evidence (ADR 0003), neighborhoods, cuisine, awards, score → payload |
+| `nyceats/menus.py` | Menu crawl (ADR 0004): robots.txt, menu-link and PDF finder, evidence sentences + prices → `data/menus.json` |
+| `nyceats/build.py` | Scope filter (`leave_out_reason`: review floor, dinner types, ADR 0005), category evidence (ADR 0003), neighborhoods, cuisine, awards, score → payload |
 | `nyceats/names.py` | Name similarity (copied from omakase, threshold 0.80), phone, ZIP, building number |
-| `docs/index.html`, `app.js` | The page (ported from nyc-restaurants `docs/venues.js`) |
+| `docs/index.html`, `app.js` | The page (ported from nyc-restaurants `docs/venues.js`); opens on the award winners (ADR 0006) |
 | `docs/core.js` | The page's pure logic; tested under node by `tests/test_site_core.py` |
 | `docs/styles.css`, `venues.css`, `data/boroughs.json` | Copied unchanged from nyc-restaurants; `eats.css` adds ours |
 
@@ -71,7 +71,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `127 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `151 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (6,598 on 2026-11-09,
    after November's runs); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.

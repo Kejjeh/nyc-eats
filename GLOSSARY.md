@@ -26,10 +26,12 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Theme** — a priority search ("tasting menu", "wagyu") whose results get a **category** on the page.
 - **Category** — the kind of meal a theme stands for: Tasting menu, Prix fixe, Omakase & chef's counter,
   Fine dining, Unusual proteins. Means Google returned it for that search AND its listing gives evidence
-  (ADR 0003: type, a theme word, or price for the expensive themes), OR the restaurant's own site names
-  the meal (ADR 0004). `category_why` on each row says which.
+  (ADR 0003: type, a theme word, or price for the expensive themes, where price counts for tasting,
+  prix fixe and omakase only if the own site was not read), OR the restaurant's own site names the meal
+  (ADR 0004). `category_why` on each row says which.
 - **Menu crawl** — `python -m nyceats menus`: reads each restaurant's own website (home page plus up to
-  3 menu-looking pages) into `data/menus.json`. Free; obeys robots.txt.
+  3 menu-looking pages and up to 2 menu PDFs) into `data/menus.json`. Free; obeys robots.txt.
+  `--upgrade` re-reads sites read by an older reader (`menus.READER`).
 - **Checked on the menu** — the crawl read the site (`status: ok`). A site that could not be read
   (robots, error, JavaScript-only "no text") is *not checked*, never "checked and found nothing".
 - **Ask** — the page's plain-English box (`core.parseAsk`): turns "Italian, $$, open past 10, near Union
@@ -38,4 +40,8 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Freshness** — "New to the guide" (not in last month's snapshot) and "Rising" (rating up 0.1+ on 10+ new
   reviews), from `data/history/YYYY-MM.json`, which `build` writes each run. The first month flags nothing.
 - **Score** — the rating shrunk toward the guide's mean by `PRIOR` (150) reviews; the default sort.
-- **In scope** — passes `build.leave_out_reason`: four boroughs, operational, rated 4.2+, sit-down.
+- **In scope** — passes `build.leave_out_reason`: four boroughs, operational, rated 4.2+, 20+ reviews
+  (`MIN_REVIEWS`), sit-down. A deli, sandwich shop, cafe or wine bar counts as sit-down when Google says
+  dine-in and serves dinner (`DINNER_TYPES`, ADR 0005).
+- **Award winners / Everything** — the page's two scopes (ADR 0006). It opens on **Award winners**
+  (a Michelin, James Beard or NYT honor); **Everything** is the whole guide. Ask and presets use Everything.

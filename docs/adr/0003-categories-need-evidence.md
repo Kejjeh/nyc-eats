@@ -38,3 +38,16 @@ Oiji Mi serve tasting menus; Lena Trattoria, Jeju Noodle Bar, Yakiniku Futago, R
 Tyger are probably only expensive. The owner chose to keep price as evidence until the menu crawl can
 check restaurants' own sites, rather than drop the many true tags with the false ones. Do not remove
 the price signal without a new ruling; replace it with menu evidence when the crawl exists.
+
+## Second follow-up ruling (2026-11-10, issue #4 item 5): price counts only where the site cannot say
+
+The menu crawl (ADR 0004) now reads restaurants' own sites. On the November guide, 204 categories rested
+on price alone: for 179 the site was read and names no tasting menu, prix fixe or omakase, and 25 sites
+could not be read. The owner ruled ("Yes, all five"):
+
+- **Tasting menu, prix fixe, omakase & chef's counter:** price is evidence only when the restaurant's own
+  site was **not** read (`menu.status != ok`). The reason then says so: "price $$$$, own site not read".
+  Where the site was read and is silent, the category is not tagged.
+- **Fine dining:** price ($$$$) stays evidence, read or not. It comes close to defining fine dining.
+- Before applying this, the crawl learned to read PDF menus (ADR 0004 amendment), so "read and silent"
+  no longer means "we skipped the PDF that says it".

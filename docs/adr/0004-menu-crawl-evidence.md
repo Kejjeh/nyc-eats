@@ -46,3 +46,12 @@ FIXE") counted as prix fixe. Now a course count is evidence only from 5 courses 
 names a holiday or event (`menus.ONE_OFF`) is never evidence. Since sites are re-read only monthly,
 `build` re-checks every stored sentence against the current rule (`menus.current_evidence`). Effect on
 the November crawl: tasting-menu sentences 295 → 173, prix-fixe 322 → 288, omakase unchanged at 186.
+
+## Amendment (2026-11-10): PDF menus are read
+
+Issue #4 item 5 made "the site was read and says nothing" decide whether price counts (ADR 0003), so a
+skipped PDF menu would now remove a true tag. The crawl reads up to `MAX_PDFS` = 2 menu PDFs per site,
+linked from the home page or its menu pages, on the site's own host or its site builder's file host
+(Squarespace keeps PDFs on static1.squarespace.com), with an 8 MB and 12-page cap, via `pypdf` (a new
+dependency). A scanned PDF has no text and adds nothing. Each record carries `reader` = `menus.READER`;
+`menus --upgrade` re-reads every site an older reader read.

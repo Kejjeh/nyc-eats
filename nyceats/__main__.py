@@ -4,7 +4,9 @@
   seed                    import the nyc-restaurants award roster (free, local, read-only)
   plan                    show the discovery plan and what this month's ledger allows (free, offline)
   discover --live -n N [--pool P]   run up to N Google calls from the plan (BILLED SKUs; inside the free cap)
-  menus [-n N] [--all]    read restaurants' own websites for tasting/omakase/prix-fixe evidence (free, network)
+  menus [-n N] [--all] [--upgrade]
+                          read restaurants' own websites for tasting/omakase/prix-fixe evidence (free, network);
+                          --upgrade re-reads sites read before the crawl read PDF menus
   monthly [--live]        spine, seed, every pool up to the cap, menus, build. Dry without --live
   build                   merge everything into docs/data/restaurants.json (offline)
 """
@@ -30,6 +32,7 @@ def main(argv=None) -> int:
     p_menu = sub.add_parser("menus")
     p_menu.add_argument("-n", "--limit", type=int, default=None, help="read at most N sites this run")
     p_menu.add_argument("--all", action="store_true", help="re-read every site, not only new or stale ones")
+    p_menu.add_argument("--upgrade", action="store_true", help="re-read sites read before PDF menus were read")
     p_month = sub.add_parser("monthly")
     p_month.add_argument("--live", action="store_true", help="spend this month's free Google allowance")
     sub.add_parser("build")
@@ -53,7 +56,7 @@ def main(argv=None) -> int:
             print(json.dumps(run_live(a.max_calls, pool=a.pool), indent=1))
     elif a.cmd == "menus":
         from .menus import crawl
-        print(json.dumps(crawl(a.limit, everything=a.all), indent=1))
+        print(json.dumps(crawl(a.limit, everything=a.all, upgrade=a.upgrade), indent=1))
     elif a.cmd == "monthly":
         print(json.dumps(monthly(a.live), indent=1))
     elif a.cmd == "build":
