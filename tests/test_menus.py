@@ -171,7 +171,8 @@ def tiny_pdf(text: str) -> bytes:
 
 
 def test_pdf_text_reads_a_menu_and_never_raises():
-    assert "Chef's tasting menu $185" in menus.pdf_text(tiny_pdf("Chef's tasting menu $185"))
+    # pypdf 7 maps a PDF's straight apostrophe to a curly one, so test words without one.
+    assert "Seasonal tasting menu $185" in menus.pdf_text(tiny_pdf("Seasonal tasting menu $185"))
     assert menus.pdf_text(b"<html>not a pdf</html>") == ""
 
 
@@ -239,3 +240,11 @@ def test_a_www_site_reads_its_bare_host_pdfs_under_its_own_robots():
                   "https://y.nyc/dinner.pdf": ("Prix fixe dinner $95", "pdf")})
     rec = menus.check_site("https://www.y.nyc/", f)
     assert "prix-fixe" in rec["evidence"] and Counting.robots_calls == 1
+
+
+def test_a_curly_apostrophe_is_still_chefs():
+    # Found by CI: pypdf 7 and many sites print "Chef’s", which MENU_WORDS spell "chef'?s".
+    ev, _ = menus.find_evidence("Chef’s tasting, nightly.\nSeats at the Chef’s Counter.")
+    assert set(ev) == {"tasting-menu", "chefs-counter"}
+    assert menus.current_evidence(ok_menu(**{"chefs-counter": "The Chef’s Table"})) == \
+        {"chefs-counter": "The Chef’s Table"}

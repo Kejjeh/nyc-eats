@@ -65,6 +65,8 @@ ONE_OFF = re.compile(r"thanksgiving|christmas|xmas|new year|nye\b|valentine|east
                      r"father'?s day|hanukkah|passover|holiday|restaurant week|halloween|super bowl", re.I)
 SNIPPET = 220
 MENU_LINK = re.compile(r"menu|tasting|omakase|prix|dinner|food|kaiseki|course", re.I)
+# Sites and PDFs often print "Chef’s" with a curly apostrophe; MENU_WORDS spell it straight.
+APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
 PRICE = re.compile(r"\$\s?(\d{2,4})(?:\.\d\d)?")
 
 
@@ -194,6 +196,7 @@ def find_evidence(text: str) -> tuple[dict[str, str], list[str]]:
     """theme -> the sentence that mentions it; and dollar amounts in those sentences."""
     evidence: dict[str, str] = {}
     prices: list[str] = []
+    text = text.translate(APOSTROPHES)
     sentences = re.split(r"(?<=[.!?])\s+|\n", text)
     for theme, pattern in MENU_WORDS.items():
         rx = re.compile(pattern, re.I)
@@ -227,7 +230,8 @@ def current_evidence(menu: dict | None) -> dict[str, str]:
     def cut(s):
         return len(s) >= SNIPPET and not s.startswith("…")
     return {t: s for t, s in (menu.get("evidence") or {}).items()
-            if t in MENU_WORDS and not ONE_OFF.search(s) and (cut(s) or re.search(MENU_WORDS[t], s, re.I))}
+            if t in MENU_WORDS and not ONE_OFF.search(s)
+            and (cut(s) or re.search(MENU_WORDS[t], s.translate(APOSTROPHES), re.I))}
 
 
 class _Fetcher:

@@ -14,7 +14,7 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 
 ```bash
 pip install -r requirements.txt                 # requests, pypdf, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 153 passed (node tests skip without node)
+python -m pytest tests -q                       # ~1s. Expect: 154 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
@@ -71,7 +71,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `153 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `154 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (6,598 on 2026-11-09,
    after November's runs); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.
