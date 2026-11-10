@@ -101,6 +101,12 @@
       <button type="button" class="btn" id="viewList" aria-pressed="true">List</button>
       <button type="button" class="btn" id="viewMap" aria-pressed="false">Map</button>
     </div>
+    <div class="viewToggle scopeToggle" role="group" aria-label="Which restaurants">
+      <button type="button" class="btn" id="scopeAwards" aria-pressed="true">Award winners
+        <span class="n" id="scopeAwardsN"></span></button>
+      <button type="button" class="btn" id="scopeAll" aria-pressed="false">Everything
+        <span class="n" id="scopeAllN"></span></button>
+    </div>
     <div class="presets" id="presets" role="group" aria-label="Quick views"></div>
     <div class="activeFilters" id="activeFilters" hidden aria-label="Active filters"></div>
     <div class="statusbar" role="status" aria-live="polite" aria-atomic="true">
@@ -141,7 +147,7 @@
   </div>
 </footer>
 
-<script src="core.js?v=2"></script>
-<script src="app.js?v=5"></script>
+<script src="core.js?v=3"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

@@ -118,3 +118,14 @@ def test_ask_reports_what_it_could_not_place_instead_of_searching_for_it():
     a = ask("romantic italian with a view")
     assert a["filters"] == {"cuisine": ["Italian"]} and a["ignored"] == ["romantic", "view"]
     assert ask("open now")["openNow"] is True
+
+
+def test_the_page_opens_on_award_winners_and_everything_adds_the_rest():
+    # Issue #4 item 4: a grid find with no award is outside the default scope, inside Everything.
+    assert run("[E.inScope({awards: ['Michelin ★ 2025']}, 'awards'), E.inScope({awards: []}, 'awards'),"
+               " E.inScope({awards: []}, 'all')]") == [True, False, True]
+
+
+def test_an_unknown_scope_is_a_bug_not_everything():
+    assert run("(() => { try { E.inScope({awards: []}, 'award'); return 'no error'; }"
+               " catch (e) { return e.message; } })()") == "unknown scope award"

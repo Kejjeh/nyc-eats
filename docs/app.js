@@ -9,7 +9,7 @@
 'use strict';
 
 const { fold, isHttpURL, isOpenAt, nycNow, weightedRating, distanceMi, priceLabel, deliveryLinks,
-        awardKind, parseAsk } = window.EATS;
+        awardKind, parseAsk, inScope } = window.EATS;
 
 const DATA_URL = 'data/restaurants.json';
 const BOROUGHS_URL = 'data/boroughs.json';
@@ -19,6 +19,7 @@ const PAGE = 100;
 const FACET_LIMIT = 14;
 const DEFAULT_MIN = 4.5; // ADR 0002: collect 4.2+, show 4.5+ unless asked
 const DEFAULT_SORT = 'score';
+const DEFAULT_SCOPE = 'awards';  // the page opens on the award winners (issue #4 item 4)
 
 const $ = (sel) => document.querySelector(sel);
 const $opt = (sel) => document.querySelector(sel) || el('span');
@@ -48,6 +49,7 @@ const STATE = {
   near: null,      // { lat, lng, label }
   radius: 1,       // miles; 0 = any
   filters: new Map(),
+  scope: DEFAULT_SCOPE,  // 'awards' | 'all'
   shown: PAGE,
   view: 'list',
   pinned: null,
@@ -116,9 +118,12 @@ const PRESETS = [
   { label: 'Delivers', apply: () => setFilter('offers', ['Delivery']) },
 ];
 
+/* A preset, like Ask, is a fresh question about the whole guide, so it searches Everything:
+   only 6 of the Bronx's restaurants hold an award. */
 function setFilter(key, values) {
   STATE.filters.clear();
   STATE.filters.set(key, new Set(values));
+  STATE.scope = 'all';
 }
 
 /* ---------- the URL is the state ----------------------------------------- */
@@ -137,6 +142,7 @@ function writeHash() {
     p.set('r', String(STATE.radius));
   }
   if (STATE.view !== 'list') p.set('view', STATE.view);
+  if (STATE.scope !== DEFAULT_SCOPE) p.set('scope', STATE.scope);
   if (STATE.shown > PAGE) p.set('n', String(STATE.shown));
   const s = p.toString();
   history.replaceState(null, '', s ? `#${s}` : location.pathname + location.search);
@@ -177,6 +183,7 @@ function readHash() {
     if (r && [...$('#radius').options].some((o) => o.value === r)) { STATE.radius = Number(r); $('#radius').value = r; }
   }
   if (p.get('view') === 'map') STATE.view = 'map';
+  if (p.get('scope') === 'all') STATE.scope = 'all';
   const n = Number(p.get('n'));
   if (Number.isInteger(n) && n > PAGE) STATE.shown = Math.min(n, STATE.rows.length);
 }
@@ -192,7 +199,8 @@ function haystack(r) {
 
 /* The always-on controls (rating, open now, distance) are tested here too, so a
    facet's count is what clicking it would show under them. */
-function matches(r, exceptKey) {
+function matches(r, exceptKey, anyScope = false) {
+  if (!anyScope && !inScope(r, STATE.scope)) return false;
   if (r.rating == null || r.rating < STATE.minRating) return false;
   if (STATE.q && !haystack(r).includes(STATE.q)) return false;
   if (STATE.openNow && openState(r) !== true) return false;
@@ -355,6 +363,15 @@ function renderPresets() {
   }
 }
 
+/* The two scope buttons carry live counts, so a filter that finds nothing among the award
+   winners still shows how many it finds in Everything. */
+function renderScope(any) {
+  $('#scopeAwardsN').textContent = any.filter((r) => inScope(r, 'awards')).length.toLocaleString();
+  $('#scopeAllN').textContent = any.length.toLocaleString();
+  $('#scopeAwards').setAttribute('aria-pressed', String(STATE.scope === 'awards'));
+  $('#scopeAll').setAttribute('aria-pressed', String(STATE.scope === 'all'));
+}
+
 function renderActive() {
   const box = $('#activeFilters');
   box.textContent = '';
@@ -377,7 +394,7 @@ function renderActive() {
 }
 
 /* Say which control emptied the list, not just "nothing matches". */
-function emptyMessage() {
+function emptyMessage(anyScopeCount) {
   const msg = $opt('#emptyMsg');
   const loose = STATE.rows.filter((r) => r.rating != null && r.rating >= STATE.minRating).length;
   const parts = [];
@@ -395,6 +412,12 @@ function emptyMessage() {
     unknownHours = STATE.rows.filter((r) => matches(r) && openState(r) == null).length;
     [STATE.openNow, STATE.openAt] = keep;
   }
+  const elsewhere = STATE.scope === 'awards' ? anyScopeCount : 0;
+  if (elsewhere) {
+    msg.textContent = `No award winner rated ${STATE.minRating}+ is ${parts.join(', ') || 'listed'}, `
+      + `but ${elsewhere.toLocaleString()} other restaurant${elsewhere === 1 ? ' is' : 's are'}. Press Everything to see ${elsewhere === 1 ? 'it' : 'them'}.`;
+    return;
+  }
   msg.textContent = `No restaurant rated ${STATE.minRating}+ is ${parts.join(', ') || 'listed'}. `
     + (unknownHours ? `${unknownHours} otherwise matching have no opening hours on file yet, so Open now `
       + 'cannot include them. ' : '')
@@ -403,7 +426,9 @@ function emptyMessage() {
 }
 
 function apply() {
-  const hits = STATE.rows.filter((r) => matches(r));
+  // One pass over the rows ignoring scope; the scope is then a cheap second filter (review of PR #14).
+  const any = STATE.rows.filter((r) => matches(r, null, true));
+  const hits = any.filter((r) => inScope(r, STATE.scope));
   hits.sort(SORTS[STATE.sort] || SORTS.score);
   const box = $('#rows');
   box.textContent = '';
@@ -415,11 +440,12 @@ function apply() {
   $('#shown').textContent = String(STATE.view === 'list' ? Math.min(STATE.shown, hits.length) : hits.length);
   $('#total').textContent = String(hits.length);
   $('#empty').hidden = hits.length !== 0;
-  if (!hits.length) emptyMessage();
+  if (!hits.length) emptyMessage(any.length);
   const more = $('#showMore');
   more.hidden = STATE.view !== 'list' || hits.length <= STATE.shown;
   more.textContent = `Show ${Math.min(PAGE, hits.length - STATE.shown)} more`;
   renderActive();
+  renderScope(any);
   const focused = document.activeElement && document.activeElement.id;
   renderFacets();
   if (focused) { const again = document.getElementById(focused); if (again) again.focus(); }
@@ -439,6 +465,7 @@ function ask(text) {
   if (!text) return;
   const a = parseAsk(text, askVocab());
   STATE.filters.clear();
+  STATE.scope = 'all';  // a question is about the whole guide, not only the award winners
   STATE.q = ''; $('#q').value = '';
   STATE.openNow = a.openNow;
   STATE.openAt = a.openAt;
@@ -598,6 +625,10 @@ function renderCoverage() {
     ` across ${Object.entries(m.by_borough).map(([b, n]) => `${b} ${n}`).join(', ')}. `
     + `${m.with_google_details.toLocaleString()} have full Google details (hours, price, delivery); `
     + 'the rest come from the award roster and fill in as the monthly free Google allowance reaches them.'));
+  const awarded = STATE.rows.filter((r) => inScope(r, 'awards')).length;
+  p.append(document.createTextNode(` The list opens on the ${awarded.toLocaleString()} that hold a Michelin, `
+    + 'James Beard or New York Times honor; press Everything for all of them. Ask and the quick views search '
+    + 'everything.'));
   box.append(p);
 }
 
@@ -635,6 +666,8 @@ function wire() {
     $('#filterBtn').setAttribute('aria-expanded', String(!panel.hidden));
   });
   $('#showMore').addEventListener('click', () => { STATE.shown += PAGE; apply(); });
+  $('#scopeAwards').addEventListener('click', () => { STATE.scope = 'awards'; STATE.shown = PAGE; apply(); });
+  $('#scopeAll').addEventListener('click', () => { STATE.scope = 'all'; STATE.shown = PAGE; apply(); });
   $('#viewList').addEventListener('click', () => setView('list'));
   $('#viewMap').addEventListener('click', () => setView('map'));
   $('#mapWrap').addEventListener('click', (e) => {
@@ -669,6 +702,7 @@ function wire() {
     STATE.radius = 1; $('#radius').value = '1';
     STATE.shown = PAGE;
     STATE.view = 'list';
+    STATE.scope = DEFAULT_SCOPE;
     readHash();
     setView(STATE.view);
   });

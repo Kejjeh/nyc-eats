@@ -175,6 +175,15 @@
     return out;
   }
 
+  /* Which restaurants the list draws from (owner ruling, issue #4 item 4): the page opens on the
+     award winners; "Everything" adds the places found by Google's searches. Any other value is a
+     bug, so it throws rather than quietly showing everything. */
+  function inScope(r, scope) {
+    if (scope === 'all') return true;
+    if (scope === 'awards') return Array.isArray(r.awards) && r.awards.length > 0;
+    throw new Error(`unknown scope ${scope}`);
+  }
+
   root.EATS = { fold, isHttpURL, isOpenAt, nycNow, weightedRating, distanceMi, priceLabel, deliveryLinks,
-                awardKind, parseAsk, clock };
+                awardKind, parseAsk, clock, inScope };
 })(typeof window !== 'undefined' ? window : globalThis);

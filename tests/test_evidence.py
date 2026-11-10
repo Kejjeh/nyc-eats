@@ -17,7 +17,7 @@ def place(name, primary_type="restaurant", price=None, summary=None, found_by=("
 
 
 @pytest.mark.parametrize("p,expected", [
-    (place("Daniel", "french_restaurant", 4), "price $$$$"),
+    (place("Daniel", "french_restaurant", 4), "price $$$$, own site not read"),
     (place("Luthun", "fine_dining_restaurant", None), "Google type fine_dining_restaurant"),
     (place("Shinzo Omakase", "sushi_restaurant", 3), "name or summary mentions 'omakase'"),
     (place("Kono", "yakitori_restaurant", None, "Intimate counter serving a chicken tasting menu"),
@@ -76,3 +76,24 @@ def test_theme_words_need_whole_words_not_fragments(theme, summary):
 ])
 def test_theme_words_still_match_real_evidence(theme, summary):
     assert theme_evidence(theme, place("X", summary=summary, found_by=[f"themed:{theme}"])) is not None
+
+
+READ_SILENT = {"status": "ok", "checked": "2026-11-10", "evidence": {}, "prices": []}
+NOT_READ = {"status": "robots", "checked": "2026-11-10", "evidence": {}, "prices": []}
+
+
+@pytest.mark.parametrize("theme,menu,expected", [
+    # Issue #4 item 5: the site was read and names no such meal, so price alone is not evidence ...
+    ("tasting-menu", READ_SILENT, None),
+    ("prix-fixe", READ_SILENT, None),
+    ("omakase", READ_SILENT, None),
+    ("kaiseki", READ_SILENT, None),
+    # ... except for fine dining, which a $$$$ price comes close to defining.
+    ("fine-dining", READ_SILENT, "price $$$$"),
+    # A site that could not be read says nothing either way, so price still counts, and says so.
+    ("tasting-menu", NOT_READ, "price $$$$, own site not read"),
+    ("tasting-menu", None, "price $$$$, own site not read"),
+])
+def test_price_is_evidence_only_where_the_site_could_not_say(theme, menu, expected):
+    g = place("Lena", "italian_restaurant", 4, found_by=[f"themed:{theme}"])
+    assert theme_evidence(theme, g, menu) == expected

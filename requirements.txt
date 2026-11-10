@@ -1,3 +1,4 @@
 requests>=2.31
+pypdf>=6.0   # reads restaurants' PDF menus (menus.pdf_text)
 pytest>=8
 tzdata>=2024.1   # zoneinfo on Windows has no time-zone database without it

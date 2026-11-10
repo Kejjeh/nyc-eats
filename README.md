@@ -90,3 +90,8 @@ Only `place_id` may be stored. Everything else from Google has to be fetched whe
   and `nyc-restaurants`.
 - **Free allowance only; best-of scope; public site** (ADR 0002): 950 calls per SKU per month,
   the best sit-down places in the Bronx, Manhattan, Brooklyn and Queens, rated 4.2+.
+- **Categories need evidence** (ADR 0003), including the restaurant's own site and its PDF menus
+  (ADR 0004). Price counts for fine dining, and for tasting / prix fixe / omakase only when the site
+  could not be read.
+- **20 reviews or more; delis, cafes and wine bars that serve dine-in dinner are in** (ADR 0005).
+- **Shrinkage score kept; the page opens on the award winners**, with an Everything button (ADR 0006).
