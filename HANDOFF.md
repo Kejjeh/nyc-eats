@@ -31,17 +31,19 @@ left to run). Expected Google charge: $0.00.
    - **details:** the 30 roster places still without Google details;
    - **nearby:** 950 of the 2,363 nearby searches still to run (split cells; a search that comes back
      full adds four more), so the grid takes about three months to finish;
-   - **themed:** nothing. All 56 themed searches ran on 2026-11-09 and become due again only after
-     28 days (`discover.REFRESH_DAYS`), on 2026-12-07, so December's 950 themed calls go unused.
+   - **themed / fill (text searches):** the 56 themed searches ran on 2026-11-09 with a rating filter
+     Google rounded up to 4.5 (ADR 0002 amendment). They count as never run until they are re-run with
+     `plan.SEARCH_MIN_RATING`, which is planned for November's unused text searches, followed by fill
+     searches.
    The end-to-end chain (spine, seed, dry run, build, menus, build) was run without Google on 2026-11-10:
    exit 0, 6,433 restaurants, and only files the task is allowed to commit changed.
 2. **JavaScript-only sites.** About 6% of the sites read show no text without JavaScript, so they stay
    "not checked". PDF menus are read since 2026-11-10 (ADR 0004 amendment).
 3. **The Pool** (Google type event venue) is out under ADR 0005; adding one place by hand would need a
    pin mechanism this repo does not have.
-4. **Themed allowance.** 847 themed calls go unused each month once the 14 themes have run. Possible
-   uses: new themes (each needs words in `build.THEME_WORDS`, ADR 0003), or re-running the themes monthly
-   (stale items do this after 28 days).
+4. **Text-search allowance.** The 56 themed searches use at most 168 of the 950 text searches a month.
+   Fill searches (GLOSSARY) take the rest while full nearby squares remain; after that, new themes
+   (each needs words in `build.THEME_WORDS`, ADR 0003) are the other use.
 
 ## Owner decisions
 

@@ -32,14 +32,24 @@ def load_inputs():
 
 
 def pending(plan: list[dict], state: dict) -> list[dict]:
-    return [it for it in plan if it["id"] not in state]
+    """Items never run, and text searches run with another `minRating` than they now send.
+
+    A text search run with the filter Google rounded up to 4.5 never asked for the guide's 4.2-4.49
+    places, so it has not really run (2026-11-10). Text searches record the `min_rating` they ran
+    with; one recorded before that (no `min_rating`) counts as run with the old filter.
+    """
+    def outdated(it):
+        want = it.get("body", {}).get("minRating")
+        return want is not None and state[it["id"]].get("min_rating") != want
+    return [it for it in plan if it["id"] not in state or outdated(it)]
 
 
 def stale(plan: list[dict], state: dict, now: datetime | None = None) -> list[dict]:
     """Finished items last run REFRESH_DAYS+ ago, oldest first. A failed lookup is not retried."""
     cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=REFRESH_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    done = [it for it in plan if it["id"] in state and not state[it["id"]].get("failed")
-            and state[it["id"]]["ran_at"] <= cutoff]
+    again = {it["id"] for it in pending(plan, state)}
+    done = [it for it in plan if it["id"] in state and it["id"] not in again
+            and not state[it["id"]].get("failed") and state[it["id"]]["ran_at"] <= cutoff]
     return sorted(done, key=lambda it: (state[it["id"]]["ran_at"], it["id"]))
 
 
@@ -137,8 +147,12 @@ def run_item(client: Client, it: dict, places: dict, now: str) -> dict:
                 break
             body["pageToken"] = token
             time.sleep(2)  # Google needs a moment before a page token is valid (recon probe)
+        out = {"ran_at": now, "calls": calls, "results": results, "new": new}
+        if text:
+            out["min_rating"] = it["body"]["minRating"]  # so a change of filter makes it due again
         if it["pool"] == "fill":
-            return {"ran_at": now, "calls": calls, "results": results, "new": new, "pages_new": pages_new}
+            out["pages_new"] = pages_new
+        return out
     return {"ran_at": now, "calls": calls, "results": results, "new": new}
 
 

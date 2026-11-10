@@ -46,6 +46,11 @@ THEMES = [
 THEME_CATEGORY = {slug: cat for slug, _, cat in THEMES}
 MAX_PAGES = 3
 MIN_RATING = 4.2
+# What a text search asks Google for. Google takes `minRating` in steps of 0.5 and rounds up, so 4.2
+# behaved as 4.5: of 938 text-search results to 2026-11-10 none was below 4.5, while 2,741 of the
+# guide's 6,433 rows are 4.2-4.49. The step at or below MIN_RATING fetches them; build.py keeps the
+# 4.2 cut, so the 4.0-4.19 places this also returns are stored but never shown.
+SEARCH_MIN_RATING = math.floor(MIN_RATING * 2) / 2
 
 # Search rectangles. They overlap at the edges and spill into New Jersey and Nassau;
 # that is fine, because the borough of each result comes from its ZIP, not from the rectangle.
@@ -84,7 +89,7 @@ def themed_items() -> list[dict]:
             (lo_lat, lo_lng), (hi_lat, hi_lng) = RECTANGLES[b]
             items.append({"id": f"themed:{slug}:{b.lower()}", "pool": "themed", "theme": slug, "borough": b,
                           "pages": MAX_PAGES, "body": {
-                              "textQuery": query, "pageSize": 20, "minRating": MIN_RATING,
+                              "textQuery": query, "pageSize": 20, "minRating": SEARCH_MIN_RATING,
                               "locationRestriction": {"rectangle": {
                                   "low": {"latitude": lo_lat, "longitude": lo_lng},
                                   "high": {"latitude": hi_lat, "longitude": hi_lng}}}}})
@@ -195,7 +200,7 @@ def split_items(base: list[dict], state: dict) -> list[dict]:
 
 
 def fill_items(nearby: list[dict], state: dict) -> list[dict]:
-    """A text search for 4.2+ restaurants over each full nearby square whose quarters have not run.
+    """A text search for 4.2+ restaurants (asked as SEARCH_MIN_RATING) over each full nearby square whose quarters have not run.
 
     Nearby Search returns 20 places at most and cannot filter by rating, so a third of what it
     finds is below the guide's bar; Text Search takes `minRating` and pages to 60. A full nearby
@@ -233,7 +238,7 @@ def fill_items(nearby: list[dict], state: dict) -> list[dict]:
         out.append({"id": f"fill:{lat:.5f},{lng:.5f},{int(round(side))}", "pool": "fill",
                     "borough": it["borough"], "square_of": it["id"], "pages": MAX_PAGES, "body": {
                         "textQuery": "restaurant", "includedType": "restaurant", "pageSize": 20,
-                        "minRating": MIN_RATING, "locationRestriction": {"rectangle": {
+                        "minRating": SEARCH_MIN_RATING, "locationRestriction": {"rectangle": {
                             "low": {"latitude": round(lat - dlat, 6), "longitude": round(lng - dlng, 6)},
                             "high": {"latitude": round(lat + dlat, 6), "longitude": round(lng + dlng, 6)}}}}})
     return out
