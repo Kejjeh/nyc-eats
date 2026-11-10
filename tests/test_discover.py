@@ -21,6 +21,7 @@ def test_every_pool_bills_the_sku_its_cap_is_kept_on():
     assert POOL_SKU["details"] == sku_for("place_details", DETAIL_FIELDS)
     assert POOL_SKU["themed"] == sku_for("text_search", SEARCH_MASK + ",nextPageToken")
     assert POOL_SKU["nearby"] == sku_for("nearby_search", SEARCH_MASK)
+    assert POOL_SKU["fill"] == sku_for("text_search", SEARCH_MASK + ",nextPageToken")
 
 
 def test_themed_items_cover_every_theme_in_every_borough_bronx_first():
@@ -214,3 +215,76 @@ def test_a_full_nearby_search_is_split_into_quarters_and_a_full_quarter_again():
     assert len(second) == 8 and sum(1 for q in second if q.get("split_from") == quarters[0]["id"]) == 4
     # A failed search is not split.
     assert split_items(base, {parent["id"]: {"results": 20, "failed": "404"}}) == []
+
+
+def nearby_and_quarters(state):
+    from nyceats.plan import split_items
+    base = [i for i in build_plan(SPINE, SEED) if i["pool"] == "nearby"]
+    return base, split_items(base, state)
+
+
+def test_a_fill_search_covers_each_full_square_whose_quarters_have_not_run():
+    from nyceats.plan import MIN_RATING, fill_items
+    base, _ = nearby_and_quarters({})
+    parent = base[0]
+    assert fill_items(base, {parent["id"]: {"results": 12}}) == []  # not full: Nearby saw everything
+    state = {parent["id"]: {"results": 20, "new": 9}}
+    base, quarters = nearby_and_quarters(state)
+    fills = fill_items(base + quarters, state)
+    assert len(fills) == 1 and fills[0]["square_of"] == parent["id"] and fills[0]["pool"] == "fill"
+    body = fills[0]["body"]
+    assert body["minRating"] == MIN_RATING and body["includedType"] == "restaurant" and body["pageSize"] == 20
+    # The rectangle is the nearby circle's square: centred on it, inside the circle.
+    c = parent["body"]["locationRestriction"]["circle"]
+    rect = body["locationRestriction"]["rectangle"]
+    lat = (rect["low"]["latitude"] + rect["high"]["latitude"]) / 2
+    lng = (rect["low"]["longitude"] + rect["high"]["longitude"]) / 2
+    assert abs(lat - c["center"]["latitude"]) < 1e-4 and abs(lng - c["center"]["longitude"]) < 1e-4
+    half_m = (rect["high"]["latitude"] - rect["low"]["latitude"]) / 2 * 111_000
+    assert half_m * 2 ** 0.5 < c["radius"]
+    # Once a quarter has run, Nearby is working through that square, so no fill search for it.
+    state[quarters[0]["id"]] = {"results": 7}
+    assert fill_items(base + quarters, state) == []
+
+
+def test_fill_searches_go_bronx_first_and_richest_square_first():
+    from nyceats.plan import fill_items
+    base, _ = nearby_and_quarters({})
+    bronx = [i for i in base if i["borough"] == "Bronx"]
+    manhattan = [i for i in base if i["borough"] == "Manhattan"]
+    state = {manhattan[0]["id"]: {"results": 20, "new": 15}, bronx[0]["id"]: {"results": 20, "new": 3}}
+    if len(manhattan) > 1:
+        state[manhattan[1]["id"]] = {"results": 20, "new": 18}
+    base, quarters = nearby_and_quarters(state)
+    order = [(f["borough"], state[f["square_of"]]["new"]) for f in fill_items(base + quarters, state)]
+    assert order[0] == ("Bronx", 3)
+    assert [n for b, n in order if b == "Manhattan"] == sorted([n for b, n in order if b == "Manhattan"], reverse=True)
+
+
+class FillSession:
+    """Text search pages of 20; page 1 all new, page 2 all already known, page 3 never reached."""
+    def __init__(self, known=()):
+        self.sent, self.known = [], set(known)
+
+    def request(self, method, url, json=None, headers=None, timeout=None):
+        self.sent.append((url, json))
+        page = int((json or {}).get("pageToken") or 1)
+        ids = [f"F{page}-{i}" for i in range(20)] if page == 1 else sorted(self.known)[:20]
+        return FakeResp({"places": [{"id": i, "rating": 4.5} for i in ids], "nextPageToken": str(page + 1)})
+
+
+def test_a_fill_search_pages_on_only_while_pages_are_full_and_mostly_new(sandbox):
+    from nyceats.plan import fill_items
+    base, _ = nearby_and_quarters({})
+    state = {base[0]["id"]: {"results": 20, "new": 9, "ran_at": "2026-11-09T00:00:00Z"}}
+    base, quarters = nearby_and_quarters(state)
+    item = fill_items(base + quarters, state)[0]
+    known = {f"K{i}": {"place_id": f"K{i}", "found_by": ["nearby"], "first_seen": "x"} for i in range(20)}
+    places = dict(known)
+    led = Ledger(paths.LEDGER, allow_new=True)
+    session = FillSession(known)
+    out = discover.run_item(Client("k", led, session=session, pause=0), item, places, "2026-11-10T00:00:00Z")
+    # Page 1: 20 new, so page 2 is worth a call; page 2: nothing new, so no page 3.
+    assert out["calls"] == 2 and out["pages_new"] == [20, 0] and out["new"] == 20
+    assert led.used(POOL_SKU["fill"]) == 2
+    assert all("fill" in places[f"F1-{i}"]["found_by"] for i in range(20))

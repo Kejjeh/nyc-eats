@@ -17,7 +17,11 @@ from .ledger import Ledger, QuotaExhausted, billing_month
 from .places_api import Client, PlacesError, now_iso, parse_place
 from .plan import POOL_SKU, build_plan
 
-POOLS = ("details", "themed", "nearby")
+POOLS = ("details", "themed", "nearby", "fill")
+# A fill search asks for its next page only when this page was full and at least this many of its
+# 20 places were new: a page can only be fetched straight away (its token expires), and a mostly
+# known page says the square is nearly covered. Set from the 2026-11-10 pilot.
+FILL_MORE_NEW = 10
 # A finished item is due again after this many days: oldest first, and only after every
 # never-run item of its pool has had its turn, so new coverage always beats a re-check.
 REFRESH_DAYS = 28
@@ -113,18 +117,28 @@ def run_item(client: Client, it: dict, places: dict, now: str) -> dict:
         new += merge(places, rec, "seed")
     else:
         body = dict(it["body"])
-        tag = f"themed:{it['theme']}" if it["pool"] == "themed" else "nearby"
+        text = it["pool"] in ("themed", "fill")
+        tag = f"themed:{it['theme']}" if it["pool"] == "themed" else it["pool"]
+        pages_new = []
         for page in range(it["pages"]):
-            resp = client.text_search(body) if it["pool"] == "themed" else client.nearby_search(body)
+            resp = client.text_search(body) if text else client.nearby_search(body)
             calls += 1
+            page_results = page_new = 0
             for p in resp.get("places", []):
-                results += 1
-                new += merge(places, parse_place(p, now), tag)
+                page_results += 1
+                page_new += merge(places, parse_place(p, now), tag)
+            results += page_results
+            new += page_new
+            pages_new.append(page_new)
             token = resp.get("nextPageToken")
-            if it["pool"] != "themed" or not token:
+            if not text or not token:
+                break
+            if it["pool"] == "fill" and (page_results < 20 or page_new < FILL_MORE_NEW):
                 break
             body["pageToken"] = token
             time.sleep(2)  # Google needs a moment before a page token is valid (recon probe)
+        if it["pool"] == "fill":
+            return {"ran_at": now, "calls": calls, "results": results, "new": new, "pages_new": pages_new}
     return {"ran_at": now, "calls": calls, "results": results, "new": new}
 
 

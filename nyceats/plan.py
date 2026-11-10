@@ -22,7 +22,9 @@ from .spine import BOROUGHS
 
 POOL_SKU = {"details": "place_details_enterprise_atmosphere",
             "themed": "text_search_enterprise_atmosphere",
-            "nearby": "nearby_search_enterprise_atmosphere"}
+            "nearby": "nearby_search_enterprise_atmosphere",
+            # Fill searches are text searches: they share the themed pool's cap of 950 a month.
+            "fill": "text_search_enterprise_atmosphere"}
 
 # (slug, query text, category shown on the site)
 THEMES = [
@@ -192,7 +194,54 @@ def split_items(base: list[dict], state: dict) -> list[dict]:
     return out
 
 
+def fill_items(nearby: list[dict], state: dict) -> list[dict]:
+    """A text search for 4.2+ restaurants over each full nearby square whose quarters have not run.
+
+    Nearby Search returns 20 places at most and cannot filter by rating, so a third of what it
+    finds is below the guide's bar; Text Search takes `minRating` and pages to 60. A full nearby
+    square is where restaurants are known to be missing (2026-11-10: 591 of them, 2,363 quarters
+    waiting). One fill search per such square, Bronx first, then the boroughs in turn, the square
+    whose nearby search found the most new places first. Once a quarter of the square has run,
+    Nearby is working through it and the fill item leaves the plan.
+    """
+    children = defaultdict(list)
+    for it in nearby:
+        if it.get("split_from"):
+            children[it["split_from"]].append(it["id"])
+    by_b = defaultdict(list)
+    for it in nearby:
+        done = state.get(it["id"])
+        if not done or done.get("failed") or done.get("results", 0) < FULL_PAGE:
+            continue
+        if any(c in state for c in children.get(it["id"], [])):
+            continue
+        by_b[it["borough"]].append(it)
+    for b in by_b:
+        by_b[b].sort(key=lambda it: (-state[it["id"]].get("new", 0), it["id"]))
+    ordered = []
+    while any(by_b.values()):
+        for b in BOROUGH_ORDER:
+            if by_b.get(b):
+                ordered.append(by_b[b].pop(0))
+    m_per_deg_lng = M_PER_DEG_LAT * math.cos(math.radians(40.75))
+    out = []
+    for it in ordered:
+        circle = it["body"]["locationRestriction"]["circle"]
+        lat, lng, r = circle["center"]["latitude"], circle["center"]["longitude"], circle["radius"]
+        side = (r - 50) * math.sqrt(2)  # the square the circle was drawn around (grid_cells, _quarters)
+        dlat, dlng = side / 2 / M_PER_DEG_LAT, side / 2 / m_per_deg_lng
+        out.append({"id": f"fill:{lat:.5f},{lng:.5f},{int(round(side))}", "pool": "fill",
+                    "borough": it["borough"], "square_of": it["id"], "pages": MAX_PAGES, "body": {
+                        "textQuery": "restaurant", "includedType": "restaurant", "pageSize": 20,
+                        "minRating": MIN_RATING, "locationRestriction": {"rectangle": {
+                            "low": {"latitude": round(lat - dlat, 6), "longitude": round(lng - dlng, 6)},
+                            "high": {"latitude": round(lat + dlat, 6), "longitude": round(lng + dlng, 6)}}}}})
+    return out
+
+
 def build_plan(spine: list[dict], seed: list[dict], state: dict | None = None) -> list[dict]:
-    """Every planned call. With `state`, nearby cells that came back full add their quarters."""
+    """Every planned call. With `state`, nearby cells that came back full add their quarters, and
+    each full square whose quarters have not run yet gets a fill search."""
     base = nearby_items(spine)
-    return details_items(seed) + themed_items() + base + split_items(base, state or {})
+    splits = split_items(base, state or {})
+    return details_items(seed) + themed_items() + base + splits + fill_items(base + splits, state or {})

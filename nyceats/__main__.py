@@ -28,7 +28,7 @@ def main(argv=None) -> int:
     p_disc = sub.add_parser("discover")
     p_disc.add_argument("--live", action="store_true", help="actually call Google (otherwise a dry run)")
     p_disc.add_argument("-n", "--max-calls", type=int, required=True, help="hard ceiling on calls this run")
-    p_disc.add_argument("--pool", choices=("details", "themed", "nearby"), help="only this pool")
+    p_disc.add_argument("--pool", choices=("details", "themed", "nearby", "fill"), help="only this pool")
     p_menu = sub.add_parser("menus")
     p_menu.add_argument("-n", "--limit", type=int, default=None, help="read at most N sites this run")
     p_menu.add_argument("--all", action="store_true", help="re-read every site, not only new or stale ones")
