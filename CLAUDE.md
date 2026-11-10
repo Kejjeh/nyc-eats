@@ -14,7 +14,7 @@ Read `HANDOFF.md` for what's next and `GLOSSARY.md` for the terms. Decisions: `d
 
 ```bash
 pip install -r requirements.txt                 # requests, pypdf, pytest, tzdata
-python -m pytest tests -q                       # ~1s. Expect: 157 passed (node tests skip without node)
+python -m pytest tests -q                       # ~1s. Expect: 160 passed (node tests skip without node)
 python -m nyceats spine                         # NETWORK, free: DOHMH + NTA names -> data/city/ (~15 s)
 python -m nyceats seed                          # local, free: nyc-restaurants roster -> data/seed/rw_roster.json
 python -m nyceats plan                          # offline: discovery plan vs this month's ledger
@@ -39,7 +39,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 | `nyceats/seed.py` | Seed: open, trusted, 4.2+ rows of the nyc-restaurants SQLite (opened `mode=ro`) |
 | `nyceats/ledger.py` | Quota ledger: counts every Google call before it is sent; refuses past 950 per SKU per Pacific month |
 | `nyceats/places_api.py` | Field masks, `sku_for` (bills at the highest field tier), `parse_place`, `Client` |
-| `nyceats/plan.py` | Discovery plan: three pools (details, themed, nearby), stable item ids, density grid |
+| `nyceats/plan.py` | Discovery plan: four pools (details, themed, nearby, fill), stable item ids, density grid |
 | `nyceats/discover.py` | Dry run / live run; merges results into `data/places.json`; resumes from `data/discovery_state.json` |
 | `nyceats/menus.py` | Menu crawl (ADR 0004): robots.txt, menu-link and PDF finder, evidence sentences + prices → `data/menus.json` |
 | `nyceats/build.py` | Scope filter (`leave_out_reason`: review floor, dinner types, ADR 0005), category evidence (ADR 0003), neighborhoods, cuisine, awards, score → payload |
@@ -71,7 +71,7 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 
 ## Before you finish any task
 
-1. `python -m pytest tests -q` → `157 passed` (more if you added tests). CI runs the same on push and PR.
+1. `python -m pytest tests -q` → `160 passed` (more if you added tests). CI runs the same on push and PR.
 2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (6,433 on 2026-11-10,
    after the issue #4 rulings); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.

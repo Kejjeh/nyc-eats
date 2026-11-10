@@ -16,6 +16,9 @@ One term, one meaning. Code, docs and the page use these exactly.
 - **Pool** — one stream of planned calls on one SKU: `details`, `themed`, `nearby`.
 - **Discovery plan** — every planned call as items with stable ids; finished items are recorded in
   `data/discovery_state.json` and never repeated.
+- **Fill search** — a text search for "restaurant", rated 4.2+ (`minRating`), over the square of a nearby
+  cell that came back full and whose quarters have not run (`plan.fill_items`). Shares the themed pool's
+  text-search cap. Pages on only while a page is full and at least `discover.FILL_MORE_NEW` of it is new.
 - **Split cell** — a nearby cell whose search came back full (20 places, the most Google returns) is split
   into four quarter-cells, new plan items (`plan.split_items`); a full quarter splits again, down to 200 m.
 - **Health grade** — the city's A/B/C letter from the restaurant's latest graded inspection (DOHMH), shown
