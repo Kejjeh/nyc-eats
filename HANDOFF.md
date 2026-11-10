@@ -9,7 +9,7 @@ issue #4 rulings (ADR 0005, 0006). The page opens on the 425 award winners. Cate
 categories come from the restaurants' own sites (6,860 sites read, 924 PDF menus). 106 rest on price
 (75 where the site does not say, 31 where it could not be read). City health grades: A 5,101, B 449,
 C 129. The rise from 6,433 is November's unused text searches (2026-11-10): the 56 themed searches
-re-run with the corrected rating filter (ADR 0002 amendment) and 362 fill searches; places on file
+re-run with the corrected rating filter (ADR 0002 amendment) and 542 fill searches; places on file
 went from 9,678 to 15,192.
 
 November's free allowance is spent: details 950/950, nearby 950/950, themed 103 (no themed items are
