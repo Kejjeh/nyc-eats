@@ -72,8 +72,8 @@ Set `PYTHONUTF8=1` on Windows when printing names (macrons, accents).
 ## Before you finish any task
 
 1. `python -m pytest tests -q` → `163 passed` (more if you added tests). CI runs the same on push and PR.
-2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (6,433 on 2026-11-10,
-   after the issue #4 rulings); check `left_out` and `neighborhood_match` in the printed meta.
+2. `python -m nyceats build` → exits 0; `restaurants` did not drop unless you meant it (9,588 on 2026-11-10,
+   after the November fill searches); check `left_out` and `neighborhood_match` in the printed meta.
 3. `git diff --stat` → only files you meant to change. A changed page file has its `?v=` bumped.
 
 ## Model routing

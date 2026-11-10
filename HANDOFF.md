@@ -3,12 +3,14 @@
 ## State (2026-11-10)
 
 **Live at https://kejjeh.github.io/nyc-eats/** (GitHub Pages, main `/docs`). The payload holds
-**6,433 restaurants** (Bronx 601, Brooklyn 1,729, Manhattan 2,637, Queens 1,466), 6,420 with Google
-details, built under the issue #4 rulings (ADR 0005, 0006). The page opens on the 425 award winners.
-Categories: 352 prix fixe, 221 tasting menu, 255 omakase & chef's counter, 99 fine dining, 17 unusual
-proteins. 662 of the categories come from the restaurants' own sites, including 690 PDF menus read on
-2026-11-10. 76 rest on price (51 fine dining, 25 where the site could not be read). City health grades:
-A 3,602, B 320, C 88.
+**9,588 restaurants** (Bronx 855, Brooklyn 2,561, Manhattan 4,057, Queens 2,115), built under the
+issue #4 rulings (ADR 0005, 0006). The page opens on the 425 award winners. Categories: 406 prix fixe,
+258 tasting menu, 307 omakase & chef's counter, 128 fine dining, 36 unusual proteins. 761 of the
+categories come from the restaurants' own sites (6,860 sites read, 924 PDF menus). 106 rest on price
+(75 where the site does not say, 31 where it could not be read). City health grades: A 5,101, B 449,
+C 129. The rise from 6,433 is November's unused text searches (2026-11-10): the 56 themed searches
+re-run with the corrected rating filter (ADR 0002 amendment) and 542 fill searches; places on file
+went from 9,678 to 15,192.
 
 November's free allowance is spent: details 950/950, nearby 950/950, themed 103 (no themed items are
 left to run). Expected Google charge: $0.00.
@@ -31,10 +33,10 @@ left to run). Expected Google charge: $0.00.
    - **details:** the 30 roster places still without Google details;
    - **nearby:** 950 of the 2,363 nearby searches still to run (split cells; a search that comes back
      full adds four more), so the grid takes about three months to finish;
-   - **themed / fill (text searches):** the 56 themed searches ran on 2026-11-09 with a rating filter
-     Google rounded up to 4.5 (ADR 0002 amendment). They count as never run until they are re-run with
-     `plan.SEARCH_MIN_RATING`, which is planned for November's unused text searches, followed by fill
-     searches.
+   - **themed / fill (text searches):** the 56 themed searches re-ran on 2026-11-10 with the corrected
+     rating filter (ADR 0002 amendment), so none is due until 2026-12-08. 948 of November's 950 text
+     searches are spent. December takes the 150 fill squares still due (up to 450 calls), as long as
+     their nearby quarters have not run first.
    The end-to-end chain (spine, seed, dry run, build, menus, build) was run without Google on 2026-11-10:
    exit 0, 6,433 restaurants, and only files the task is allowed to commit changed.
 2. **JavaScript-only sites.** About 6% of the sites read show no text without JavaScript, so they stay
